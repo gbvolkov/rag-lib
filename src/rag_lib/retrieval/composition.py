@@ -113,3 +113,18 @@ def create_reranking_retriever(
         base_compressor=compressor,
         base_retriever=base_retriever
     )
+
+def create_graph_hybrid_retriever(
+    vector_retriever: BaseRetriever,
+    graph_retriever: BaseRetriever,
+    weights: List[float] = [0.7, 0.3]
+) -> EnsembleRetriever:
+    """
+    Combines Vector Retrieval (Semantic) with Graph Retrieval (Structural/Relational).
+    Default weight favors Vector (0.7) over Graph (0.3).
+    """
+    return create_ensemble_retriever(
+        retrievers=[vector_retriever, graph_retriever],
+        weights=weights
+    )
+

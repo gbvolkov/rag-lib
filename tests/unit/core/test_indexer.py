@@ -68,3 +68,19 @@ def test_indexer_batching(mock_vector_store, mock_embeddings):
     # Verify last batch
     last_call = mock_vector_store.add_texts.call_args_list[2]
     assert len(last_call.kwargs['texts']) == 5
+
+def test_indexer_triggers_graph_extraction(mock_vector_store, mock_embeddings):
+    # Mock EntityExtractor
+    mock_extractor = MagicMock()
+    
+    indexer = Indexer(
+        vector_store=mock_vector_store, 
+        embeddings=mock_embeddings, 
+        entity_extractor=mock_extractor
+    )
+    
+    seg = Segment(content="Graph Content", type=SegmentType.TEXT)
+    indexer.index([seg])
+    
+    # Assert process_segments called
+    mock_extractor.process_segments.assert_called_once_with([seg])

@@ -108,3 +108,16 @@ def get_bm25_retriever(
     Note: Requires all documents to be loaded in memory to build the index.
     """
     return BM25Retriever.from_documents(documents, k=k)
+
+def get_graph_retriever(
+    graph_store: Any, # BaseGraphStore
+    search_depth: int = 1
+) -> BaseRetriever:
+    """
+    Factory for Graph Retriever.
+    """
+    # Import locally to avoid circular imports or heavy deps if not used
+    from rag_lib.retrieval.graph_retriever import GraphRetriever
+    
+    return GraphRetriever(store=graph_store, search_depth=search_depth)
+

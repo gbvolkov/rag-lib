@@ -236,3 +236,76 @@ To add a new Chunker:
 
 1.  Inherit from `rag_lib.chunkers.base.TextSplitter` (if text-based).
 2.  Implement `split_text(self, text: str) -> List[str]`.
+
+---
+
+## 9. Graph RAG Extensions
+
+`rag-lib` 0.2.0+ introduces **Graph RAG** capabilities, inspired by _LightRAG_. This allows for entity-centric retrieval and global summarization.
+
+### 9.1. Components (`rag_lib.graph`)
+
+| Component                     | Description                                                            |
+| :---------------------------- | :--------------------------------------------------------------------- |
+| **`GraphNode` / `GraphEdge`** | Domain models for graph entities and relationships.                    |
+| **`NetworkXGraphStore`**      | In-memory graph storage (default). Good for prototyping.               |
+| **`Neo4jGraphStore`**         | Persistent graph storage adapter for Neo4j. Requires `rag-lib[graph]`. |
+
+### 9.2. Processors
+
+| Component                 | Description                                                                                                                               |
+| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| **`EntityExtractor`**     | LLM-based processor that extracts Entities and Relations from Segments and populates the GraphStore. Supports **Async Batch Processing**. |
+| **`CommunityDetector`**   | Identifies communities (clusters) of nodes in the graph using modularity algorithms.                                                      |
+| **`CommunitySummarizer`** | Generates high-level summaries for each detected community.                                                                               |
+
+### 9.3. Retrieval
+
+**`GraphRetriever`** supports two modes:
+
+1.  **Local Mode** (`mode="local"`):
+    - Implementation: Searches for specific entities (keywords) and traverses 1-hop or 2-hop neighbors.
+    - Use Case: Specific questions about an entity (e.g., "Who follows user X?").
+
+2.  **Global Mode** (`mode="global"`):
+    - Implementation: Retrieves **Community Summaries** from the Vector Store.
+    - Use Case: High-level thematic questions (e.g., "What are the main topics discussed?").
+
+### 9.4. Example Usage
+
+```python
+from rag_lib.graph.store import NetworkXGraphStore
+from rag_lib.processors.entity_extractor import EntityExtractor
+from rag_lib.retrieval.graph_retriever import GraphRetriever
+
+# 1. Setup
+store = NetworkXGraphStore()
+extractor = EntityExtractor(llm=my_llm, store=store)
+
+# 2. Extract Graph
+await extractor.aprocess_segments(segments)
+
+# 3. Retrieve
+retriever = GraphRetriever(store=store, mode="local")
+docs = await retriever.ainvoke("Key Concept")
+```
+
+---
+
+## 10. Advanced Loaders
+
+### 10.1. MinerU (`rag_lib.loaders.miner_u`)
+
+Integration with **Magic-PDF (MinerU)** for high-fidelity PDF parsing.
+
+- **Purpose**: Extracts text, tables, and images while preserving layout information better than standard parsers.
+- **Requirement**: `pip install rag-lib[miner_u]`
+- **Class**: `MinerULoader`
+
+```python
+from rag_lib.loaders.miner_u import MinerULoader
+
+loader = MinerULoader("complex_layout.pdf")
+segments = loader.load()
+# Returns typed Segments (TEXT, TABLE, IMAGE)
+```
