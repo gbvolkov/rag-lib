@@ -1,3 +1,4 @@
 from rag_lib.processors.enricher import SegmentEnricher
 from rag_lib.processors.entity_extractor import EntityExtractor
 from rag_lib.processors.community_summarizer import CommunitySummarizer
+from rag_lib.processors.raptor import RaptorProcessor

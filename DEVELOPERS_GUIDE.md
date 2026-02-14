@@ -309,3 +309,70 @@ loader = MinerULoader("complex_layout.pdf")
 segments = loader.load()
 # Returns typed Segments (TEXT, TABLE, IMAGE)
 ```
+
+---
+
+## 11. RAPTOR (Recursive Abstractive Processing)
+
+**RAPTOR** (`rag_lib.raptor`) is a technique for **hierarchical summarization**. It recursively clusters text segments and summarizes them to build a "tree" of information. This allows the system to answer high-level questions that span across many documents.
+
+### 11.1. Installation & Environment (Crucial!)
+
+RAPTOR relies on `umap-learn` for dimensionality reduction, which has complex dependencies (Numba, llvmlite).
+
+> [!WARNING]
+> **Avoid `uv sync` for RAPTOR**: `uv` often fails to build `numba` because it requires specific C++ compilers.
+
+**Recommended Installation**:
+
+1.  **Use `pip` explicitly** inside your virtual environment to get pre-built wheels:
+
+    ```bash
+    # Windows / Linux / Mac
+    pip install umap-learn scikit-learn
+    ```
+
+2.  **Project Config**:
+    To install via project extras (if `uv` supports wheels on your OS):
+
+    ```bash
+    pip install ".[raptor]"
+    # OR
+    uv sync --extra raptor
+    ```
+
+3.  **Troubleshooting**:
+    If you see `ImportError: No module named 'umap'`, run the manual `pip install` command above.
+
+### 11.2. Components
+
+| Component               | Import Path                    | Description                                                                  |
+| :---------------------- | :----------------------------- | :--------------------------------------------------------------------------- |
+| **`ClusteringService`** | `rag_lib.raptor.clustering`    | Uses **UMAP** (dim reduction) + **GMM** (Gaussian Mixture) to cluster texts. |
+| **`ClusterSummarizer`** | `rag_lib.raptor.summarization` | Summarizes a list of texts using an LLM.                                     |
+| **`TreeBuilder`**       | `rag_lib.raptor.tree_builder`  | Orchestrates the recursive Level 0 -> Level N tree creation.                 |
+| **`RaptorProcessor`**   | `rag_lib.processors.raptor`    | Main entry point. Wraps `TreeBuilder` into a standard Processor.             |
+
+### 11.3. Example Usage
+
+```python
+from rag_lib.processors.raptor import RaptorProcessor
+from rag_lib.raptor.clustering import ClusteringService
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+# 1. Setup Components
+llm = ChatOpenAI(model="gpt-4o")
+embeddings = OpenAIEmbeddings()
+
+# 2. Initialize Processor (Automatic Clustering Service)
+raptor = RaptorProcessor(
+    llm=llm,
+    embeddings=embeddings,
+    max_levels=3
+)
+
+# 3. Process Segments
+# Input: List[Segment] (Level 0)
+# Output: List[Segment] (Level 0 + Level 1 Summaries + Level 2 Summaries...)
+enriched_segments = await raptor.aprocess(raw_segments)
+```
