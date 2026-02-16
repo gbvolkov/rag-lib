@@ -1,0 +1,15 @@
+E
+======================================================================
+ERROR: test_threshold_passing (__main__.TestScoredRetrieverThreshold.test_threshold_passing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\rag-lib\tests\test_scored_retrieval_threshold.py", line 27, in test_threshold_passing
+    mock_vectorstore = MockVectorStore()
+TypeError: Can't instantiate abstract class MockVectorStore without an implementation for abstract method 'from_texts'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (errors=1)
+
+--- Testing Search Threshold Passing ---

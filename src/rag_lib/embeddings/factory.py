@@ -1,8 +1,15 @@
 import os
 from typing import Optional
 from langchain_core.embeddings import Embeddings
-from langchain_openai import OpenAIEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+try:
+    from langchain_openai import OpenAIEmbeddings
+except ImportError:
+    OpenAIEmbeddings = None
+
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    HuggingFaceEmbeddings = None
 
 from rag_lib.config import settings
 
@@ -17,12 +24,16 @@ def get_embeddings_model(
     model_name = model_name or settings.embeddings.model_name
 
     if provider == "openai":
+        if OpenAIEmbeddings is None:
+            raise ImportError("langchain-openai is not installed. Please install it.")
         return OpenAIEmbeddings(
             model=model_name or "text-embedding-3-small",
             api_key=settings.openai_api_key
         )
     
     elif provider == "local" or provider == "huggingface":
+        if HuggingFaceEmbeddings is None:
+            raise ImportError("langchain-huggingface is not installed. Please install it.")
         # Default to the user-requested multilingual model
         model = model_name or "intfloat/multilingual-e5-large"
         return HuggingFaceEmbeddings(

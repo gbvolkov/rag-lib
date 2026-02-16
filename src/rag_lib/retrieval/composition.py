@@ -1,36 +1,23 @@
-from typing import List, Optional, Union, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 from langchain_core.retrievers import BaseRetriever
-
-# Robust Import Logic for LangChain variations
-try:
-    # Try langchain_classic first (as seen in user env)
-    # Use top-level import as submodule import proved flaky in verification
-    from langchain_classic.retrievers import EnsembleRetriever, MultiVectorRetriever
-    from langchain_classic.retrievers import ContextualCompressionRetriever
-    # Try to get CrossEncoderReranker from classic or standard
-    try:
-         from langchain.retrievers.document_compressors import CrossEncoderReranker
-    except ImportError:
-         try:
-            from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
-         except ImportError:
-            from langchain_classic.retrievers.document_compressors.cross_encoder_rerank import CrossEncoderReranker
-         
-except ImportError:
-    try:
-        # Try standard langchain
-        from langchain.retrievers import EnsembleRetriever, MultiVectorRetriever
-        from langchain.retrievers import ContextualCompressionRetriever
-        from langchain.retrievers.document_compressors import CrossEncoderReranker
-    except ImportError:
-         # Try specific submodules as last resort
-        from langchain.retrievers.ensemble import EnsembleRetriever
-        from langchain.retrievers.multi_vector import MultiVectorRetriever
-        from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
-        from langchain.retrievers.document_compressors import CrossEncoderReranker
-from langchain_core.stores import BaseStore
-from langchain_core.vectorstores import VectorStore
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
+from langchain_core.vectorstores import VectorStore
+from langchain_core.stores import BaseStore
+
+# Use strict imports from langchain_classic as per environment
+try:
+    from langchain_classic.retrievers import (
+        EnsembleRetriever, 
+        MultiVectorRetriever,
+        ContextualCompressionRetriever
+    )
+    from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
+except ImportError as e:
+    # Fallback/Error handling if classic is missing (unlikely given env) but user wanted NO fallback
+    raise ImportError(f"Required 'langchain-classic' not found or incomplete: {e}")
+
+# Note: SearchType is not available in classic, so we use string literals/defaults.
 
 # Try importing HuggingFaceCrossEncoder (optional dependency)
 try:
@@ -39,27 +26,23 @@ except ImportError:
     HuggingFaceCrossEncoder = None
 
 def create_ensemble_retriever(
-    retrievers: List[BaseRetriever], 
+    retrievers: List[BaseRetriever],
     weights: Optional[List[float]] = None
-) -> EnsembleRetriever:
+) -> BaseRetriever:
     """
-    Combines multiple retrievers into a single EnsembleRetriever using Reciprocal Rank Fusion (RRF).
+    Creates an EnsembleRetriever from a list of retrievers.
     """
     if not retrievers:
-        raise ValueError("Must provide at least one retriever for Ensemble.")
-    
-    if len(retrievers) == 1:
-        # Optimization: return the single retriever if only one provided
-        # BUT EnsembleRetriever returns a wrapper, which might be expected.
-        # Let's return Ensemble to be consistent with type hint, or just the base.
-        # Actually LangChain's EnsembleRetriever requires a list.
-        pass
-
-    return EnsembleRetriever(retrievers=retrievers, weights=weights)
+        raise ValueError("Must provide at least one retriever")
+        
+    return EnsembleRetriever(
+        retrievers=retrievers,
+        weights=weights
+    )
 
 def create_dual_storage_retriever(
     vector_store: VectorStore, 
-    doc_store: BaseStore[str, Document], # Our Segment store usually stores Segments, but MultiVector expects compatible type
+    docstore: BaseStore[str, Document], # Renamed to standard docstore
     id_key: str = "segment_id",
     search_kwargs: Optional[Dict[str, Any]] = None
 ) -> MultiVectorRetriever:
@@ -73,13 +56,38 @@ def create_dual_storage_retriever(
     LangChain expects mget to return things that can be treated as Documents or bytes?
     Actually MultiVectorRetriever just returns whatever doc_store.mget returns.
     """
+
     retriever = MultiVectorRetriever(
         vectorstore=vector_store,
-        byte_store=doc_store, # Parameter name is byte_store but accepts BaseStore
-        id_key=id_key,
-        search_kwargs=search_kwargs or {}
+        docstore=docstore, 
+        search_kwargs=search_kwargs or {},
+        search_type="similarity_score_threshold"
     )
     return retriever
+
+from rag_lib.retrieval.scored_retriever import ScoredMultiVectorRetriever, SearchType
+
+def create_scored_dual_storage_retriever(
+    vector_store: VectorStore,
+    docstore: BaseStore[str, Document],
+    id_key: str = "segment_id",
+    search_kwargs: Optional[Dict[str, Any]] = None,
+    search_type: SearchType = SearchType.similarity,
+    score_threshold: float | None = None
+) -> BaseRetriever:
+    """
+    Creates a ScoredMultiVectorRetriever.
+    Like Dual Storage, but returns Parent Documents with aggregated Similarity Scores (max) from chunks.
+    Metadata 'score' is added to the parent document.
+    """
+    return ScoredMultiVectorRetriever(
+        vectorstore=vector_store,
+        docstore=docstore,
+        id_key=id_key,
+        search_kwargs=search_kwargs or {},
+        search_type=search_type,
+        score_threshold=score_threshold
+    )
 
 def create_reranking_retriever(
     base_retriever_or_list: Union[BaseRetriever, List[BaseRetriever]],

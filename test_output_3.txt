@@ -1,0 +1,16 @@
+E
+======================================================================
+ERROR: test_threshold_passing (__main__.TestScoredRetrieverThreshold.test_threshold_passing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\rag-lib\tests\test_scored_retrieval_threshold.py", line 33, in test_threshold_passing
+    doc_high = Document(page_content="High", metadata={"pid": "p1"})
+               ^^^^^^^^
+NameError: name 'Document' is not defined
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (errors=1)
+
+--- Testing Search Threshold Passing ---

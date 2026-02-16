@@ -13,11 +13,12 @@ except LookupError:
 
 from rag_lib.config import Settings
 from rag_lib.core.logger import logger
-from rag_lib.chunkers.base import TextSplitter # Added logger import
+from rag_lib.chunkers.base import TextSplitter
 
-class SemanticChunker(TextSplitter): # Changed inheritance to TextSplitter
+class SemanticChunker(TextSplitter):
     """
     Splits text based on semantic similarity of sentences.
+    Inherits from TextSplitter to support standardized pipeline.
     """
     def __init__(self, embeddings: Embeddings, threshold: Optional[float] = None, window_size: int = 1,
                  threshold_type: str = "fixed", percentile_threshold: int = 90):
@@ -29,6 +30,8 @@ class SemanticChunker(TextSplitter): # Changed inheritance to TextSplitter
             threshold_type: "fixed" or "percentile".
             percentile_threshold: If "percentile", the percentile of similarity to use as threshold.
         """
+        super().__init__() # Initialize base (chunk_size/overlap not typically used here but good practice)
+        
         if threshold is None:
             threshold = Settings().ingestion.semantic_threshold
 
@@ -47,7 +50,10 @@ class SemanticChunker(TextSplitter): # Changed inheritance to TextSplitter
             return 0.0
         return np.dot(a, b) / (norm_a * norm_b)
 
-    def split_text(self, text: str) -> List[str]: # Renamed method to split_text and changed return type
+    def split_text(self, text: str) -> List[str]:
+        """
+        Splits text into semantically grouped sentence chunks (strings).
+        """
         # 1. Split into Sentences
         sentences = sent_tokenize(text)
         if len(sentences) <= 1:
@@ -72,7 +78,7 @@ class SemanticChunker(TextSplitter): # Changed inheritance to TextSplitter
             current_threshold = np.percentile(similarities, self.percentile_threshold)
         
         # 5. Group
-        segments: List[Segment] = []
+        chunks: List[str] = []
         current_group = [sentences[0]]
         
         for i in range(1, len(sentences)):
@@ -84,11 +90,11 @@ class SemanticChunker(TextSplitter): # Changed inheritance to TextSplitter
                 current_group.append(sentences[i])
             else:
                 # Split
-                segments.append(Segment(content=" ".join(current_group), type=SegmentType.TEXT))
+                chunks.append(" ".join(current_group))
                 current_group = [sentences[i]]
         
         # Flush last group
         if current_group:
-            segments.append(Segment(content=" ".join(current_group), type=SegmentType.TEXT))
+            chunks.append(" ".join(current_group))
             
-        return segments
+        return chunks

@@ -59,8 +59,7 @@ class FuzzyRetriever(BaseRetriever):
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
         if not process:
-            # Fallback if rapidfuzz not installed
-            return []
+            raise ImportError("rapidfuzz is required for FuzzyRetriever. Please install it.")
             
         # We search against page_content
         choices = [doc.page_content for doc in self.documents]

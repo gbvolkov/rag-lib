@@ -7,22 +7,22 @@ from rag_lib.config import Settings
 try:
     from langchain_chroma import Chroma
 except ImportError:
-    Chroma = Any
+    Chroma = None
 
 try:
     from langchain_community.vectorstores import FAISS
 except ImportError:
-    FAISS = Any
+    FAISS = None
 
 try:
     from langchain_qdrant import Qdrant
 except ImportError:
-    Qdrant = Any
+    Qdrant = None
 
 try:
     from langchain_postgres import PGVector
 except ImportError:
-    PGVector = Any
+    PGVector = None
 
 def get_vector_store(
     provider: str = "chroma",
@@ -45,6 +45,9 @@ def get_vector_store(
     settings = Settings()
 
     if provider == "chroma":
+        if Chroma is None:
+            raise ImportError("langchain-chroma is not installed. Please install it with `pip install langchain-chroma`.")
+            
         # Check if persistent or in-memory
         # For production, we use settings or default to a local dir
         persist_dir = settings.vector_store.path if settings.vector_store.path else "./chroma_db"
@@ -55,6 +58,9 @@ def get_vector_store(
         )
         
     elif provider == "faiss":
+        if FAISS is None:
+             raise ImportError("langchain-community and faiss-cpu/gpu are not installed. Please install them.")
+             
         # FAISS initialization often requires documents if creating fresh.
         # But we want an empty store to add documents to.
         # LangChain FAISS doesn't easily support "empty" init.
@@ -67,6 +73,9 @@ def get_vector_store(
         return FAISS.from_texts([""], embeddings)
 
     elif provider == "qdrant":
+        if Qdrant is None:
+            raise ImportError("langchain-qdrant is not installed. Please install it.")
+            
         if not connection_string:
              # In-memory
              return Qdrant(
@@ -82,6 +91,9 @@ def get_vector_store(
         )
 
     elif provider == "postgres":
+        if PGVector is None:
+            raise ImportError("langchain-postgres and psycopg are not installed. Please install them.")
+            
         if not connection_string:
             raise ValueError("Connection string required for Postgres vector store")
             

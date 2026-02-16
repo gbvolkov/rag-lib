@@ -1,0 +1,22 @@
+--- 01_text_basic.py: Basic Text Processing with Loader & Document Pipeline ---
+Loading terms&defs.txt using TextLoader...
+Loaded 1 document(s).
+Segmentation (rag_lib.RegexSplitter: Document -> Segments)...
+Created 526 logical segments from document.
+Chunking (rag_lib.TokenTextSplitter: Segments -> Chunks)...
+Generated 606 chunks from 526 logical segments.
+Saved segments to C:\Projects\rag-lib\docs\results\01_text_basic_segments_20260216_120117.json
+Saved chunks_detailed to C:\Projects\rag-lib\docs\results\01_text_basic_chunks_detailed_20260216_120117.json
+Indexing chunks and setting up Dual Storage...
+DEBUG: Attempting langchain_classic import...
+DEBUG: langchain_classic SUCCESS
+Traceback (most recent call last):
+  File "C:\Projects\rag-lib\examples\01_text_basic.py", line 195, in <module>
+    main()
+    ~~~~^^
+  File "C:\Projects\rag-lib\examples\01_text_basic.py", line 127, in main
+    from rag_lib.retrieval.composition import create_dual_storage_retriever
+  File "C:\Projects\rag-lib\src\rag_lib\retrieval\composition.py", line 76, in <module>
+    ) -> ContextualCompressionRetriever:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'ContextualCompressionRetriever' is not defined

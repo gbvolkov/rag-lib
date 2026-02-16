@@ -1,9 +1,6 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-try:
-    from langchain_core.documents import Document
-except ImportError:
-    Document = Any  # Fallback for skeleton, though tests require it
+from langchain_core.documents import Document
 
 from enum import Enum
 

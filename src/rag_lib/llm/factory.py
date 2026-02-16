@@ -2,15 +2,20 @@ import os
 from typing import Optional, Sequence, Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_openai import ChatOpenAI
-from langchain_mistralai import ChatMistralAI
-# Assuming generic community implementation or wrapper for Yandex if specific lib not found
-# The user snippet used config.YA_FOLDER_ID, etc. We'll use os.getenv/explicit args.
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    ChatOpenAI = None
+
+try:
+    from langchain_mistralai import ChatMistralAI
+except ImportError:
+    ChatMistralAI = None
+
 try:
     from langchain_community.chat_models import ChatYandexGPT
 except ImportError:
-    # Fallback or placeholder if dependency issues
-    ChatYandexGPT = Any
+    ChatYandexGPT = None
 
 from rag_lib.config import settings
 
@@ -41,6 +46,8 @@ def get_llm(
         llm_model = "gpt-4o-mini" # Example default
     
     if provider == "openai":
+        if ChatOpenAI is None:
+            raise ImportError("langchain-openai is not installed. Please install it.")
         # logic for 'base' verbosity
         verbosity = "low" if model == "base" else "medium"
         reasoning = "none" if model == "base" else "minimal"
@@ -59,6 +66,8 @@ def get_llm(
         )
 
     elif provider == "openai_think":
+        if ChatOpenAI is None:
+            raise ImportError("langchain-openai is not installed. Please install it.")
         verbosity = "low" if model == "base" else "medium"
         reasoning = {
             "effort": "medium"
@@ -82,6 +91,8 @@ def get_llm(
         )
 
     elif provider == "openai_4":
+        if ChatOpenAI is None:
+            raise ImportError("langchain-openai is not installed. Please install it.")
         return ChatOpenAI(
             model=llm_model, 
             api_key=settings.openai_api_key,
@@ -92,6 +103,8 @@ def get_llm(
         )
 
     elif provider == "openai_pers":
+        if ChatOpenAI is None:
+            raise ImportError("langchain-openai is not installed. Please install it.")
         return ChatOpenAI(
             model=llm_model, 
             api_key=settings.openai_api_key_personal,
@@ -102,6 +115,8 @@ def get_llm(
         )
 
     elif provider == "mistral":
+        if ChatMistralAI is None:
+            raise ImportError("langchain-mistralai is not installed. Please install it.")
         return ChatMistralAI(
             model=llm_model, 
             api_key=settings.mistral_api_key,
@@ -112,6 +127,8 @@ def get_llm(
         )
 
     elif provider == "yandex":
+        if ChatYandexGPT is None:
+            raise ImportError("langchain-community is not installed or ChatYandexGPT is missing.")
         # constructing model uri
         folder_id = settings.ya_folder_id
         api_key = settings.ya_api_key

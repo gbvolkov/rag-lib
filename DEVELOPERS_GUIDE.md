@@ -59,7 +59,8 @@ python -c "import rag_lib; print(rag_lib.__version__)"
 ```mermaid
 graph TD
     Input[Documents: PDF, DOCX, CSV] --> Loaders
-    Loaders -->|Raw Segments| Chunkers
+    Loaders -->|Documents| Splitters
+    Splitters -->|Segments| Chunkers
     Chunkers -->|Refined Segments| Processors
     Processors -->|Enriched Segments| Indexer
     Indexer --> VectorStore[(Vector DB)]
@@ -78,31 +79,37 @@ graph TD
 
 ### 4.1. Loaders (`rag_lib.loaders`)
 
-Responsible for ingesting raw files and producing initial Segments.
+Responsible for ingesting raw files and producing standard **LangChain Documents**.
 
 | Class                      | Import Path                    | Description                                                                                                  |
 | :------------------------- | :----------------------------- | :----------------------------------------------------------------------------------------------------------- |
 | **`PDFLoader`**            | `rag_lib.loaders.pdf`          | Uses **Camelot** (lattice/stream) or **Poppler** to extract text and high-fidelity tables from PDFs.         |
-| **`StructuredLoader`**     | `rag_lib.loaders.structured`   | Parses **DOCX** files, preserving hierarchy based on Heading styles. Supports regex-based sub-splitting.     |
+| **`StructuredLoader`**     | `rag_lib.loaders.structured`   | Parses **DOCX** files into a single **Markdown** document, preserving hierarchy.                             |
 | **`CSVLoader`**            | `rag_lib.loaders.csv_excel`    | Loads **CSV** files. Detects delimiters automatically and converts rows to Markdown tables.                  |
 | **`ExcelLoader`**          | `rag_lib.loaders.csv_excel`    | Loads **Excel** files, treating each sheet as a segment.                                                     |
 | **`RegexHierarchyLoader`** | `rag_lib.loaders.regex`        | Splits plain text files using a recursive list of regex patterns (e.g., Log files, Configs).                 |
 | **`TableLoader`**          | `rag_lib.loaders.data_loaders` | Generic loader for structured tabular data (CSV/JSON). Supports "Row" mode (key-value text) or "Group" mode. |
-| **`JsonLoader`**           | `rag_lib.loaders.data_loaders` | Loads JSON files. Supports **jq-style** schema selection to target specific lists or dicts.                  |
+| **`JsonLoader`**           | `rag_lib.loaders.data_loaders` | Loads entire JSON file content into a single **Document**.                                                   |
 | **`QALoader`**             | `rag_lib.loaders.data_loaders` | Parses "Q: ... A: ..." formatted text files into QA segments.                                                |
 
-### 4.2. Chunkers (`rag_lib.chunkers`)
+### 4.2. Splitters & Chunkers (`rag_lib.chunkers`)
 
-Refine raw segments into optimally sized units for retrieval.
+Refine raw Documents into Segments (Structure) or Segments into Chunks (Size).
 
-| Class                                | Import Path                       | Description                                                                               |
-| :----------------------------------- | :-------------------------------- | :---------------------------------------------------------------------------------------- |
-| **`SemanticChunker`**                | `rag_lib.chunkers.semantic`       | Splits text based on **cosine similarity** of sentence embeddings (detects topic shifts). |
-| **`RecursiveCharacterTextSplitter`** | `rag_lib.chunkers.recursive`      | Standard recursive splitting (paragraphs -> sentences -> words) to fit chunk size.        |
-| **`TokenTextSplitter`**              | `rag_lib.chunkers.token`          | Splits text based on **token count** (using `tiktoken`) rather than characters.           |
-| **`SentenceSplitter`**               | `rag_lib.chunkers.sentence`       | Uses **NLTK** to split by true sentences, grouping them until chunk size is reached.      |
-| **`RegexSplitter`**                  | `rag_lib.chunkers.regex`          | Splits text based on a provided regex pattern.                                            |
-| **`MarkdownTableSplitter`**          | `rag_lib.chunkers.markdown_table` | Extracts Markdown tables from text to ensure they remain intact as distinct segments.     |
+- **`split_documents(docs)`**: Converts Documents -> Segments (Logical Splitting).
+- **`split_segments(segs)`**: Converts Segments -> Chunks (Token/Character limitation).
+
+| Class                                | Import Path                        | Description                                                                                |
+| :----------------------------------- | :--------------------------------- | :----------------------------------------------------------------------------------------- |
+| **`JsonSplitter`**                   | `rag_lib.chunkers.json`            | Splits JSON content based on **jq-style** schema (e.g., extracting items from a list).     |
+| **`QASplitter`**                     | `rag_lib.chunkers.qa`              | Splits text containing "Q: ... A: ..." pairs into distinct Question/Answer segments.       |
+| **`RegexHierarchySplitter`**         | `rag_lib.chunkers.regex_hierarchy` | Splits text recursively using a list of regex patterns (e.g. Log levels, Config sections). |
+| **`SemanticChunker`**                | `rag_lib.chunkers.semantic`        | Splits text based on **cosine similarity** of sentence embeddings (detects topic shifts).  |
+| **`RecursiveCharacterTextSplitter`** | `rag_lib.chunkers.recursive`       | Standard recursive splitting (paragraphs -> sentences -> words) to fit chunk size.         |
+| **`TokenTextSplitter`**              | `rag_lib.chunkers.token`           | Splits text based on **token count** (using `tiktoken`) rather than characters.            |
+| **`SentenceSplitter`**               | `rag_lib.chunkers.sentence`        | Uses **NLTK** to split by true sentences, grouping them until chunk size is reached.       |
+| **`RegexSplitter`**                  | `rag_lib.chunkers.regex`           | Splits text based on a provided regex pattern.                                             |
+| **`MarkdownTableSplitter`**          | `rag_lib.chunkers.markdown_table`  | Extracts Markdown tables from text to ensure they remain intact as distinct segments.      |
 
 ### 4.3. Processors (`rag_lib.processors`)
 
@@ -128,22 +135,24 @@ The bridge to your Vector Database.
 
 ### 5.1. Retrievers
 
-| Class/Factory              | Import Path                    | Description                                                                 |
-| :------------------------- | :----------------------------- | :-------------------------------------------------------------------------- |
-| **`get_vector_retriever`** | `rag_lib.retrieval.retrievers` | Standard dense vector retrieval (Similarity, MMR, Score Threshold).         |
-| **`get_bm25_retriever`**   | `rag_lib.retrieval.retrievers` | **BM25** (Sparse) retrieval for keyword matching. (In-memory).              |
-| **`RegexRetriever`**       | `rag_lib.retrieval.retrievers` | Finds documents matching a specific **Regex Pattern** (good for IDs/Codes). |
-| **`FuzzyRetriever`**       | `rag_lib.retrieval.retrievers` | Uses **Levenshtein Distance** (RapidFuzz) for fuzzy string matching.        |
+| Class/Factory                    | Import Path                          | Description                                                                                                        |
+| :------------------------------- | :----------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
+| **`get_vector_retriever`**       | `rag_lib.retrieval.retrievers`       | Standard dense vector retrieval (Similarity, MMR, Score Threshold).                                                |
+| **`get_bm25_retriever`**         | `rag_lib.retrieval.retrievers`       | **BM25** (Sparse) retrieval for keyword matching. (In-memory).                                                     |
+| **`RegexRetriever`**             | `rag_lib.retrieval.retrievers`       | Finds documents matching a specific **Regex Pattern** (good for IDs/Codes).                                        |
+| **`FuzzyRetriever`**             | `rag_lib.retrieval.retrievers`       | Uses **Levenshtein Distance** (RapidFuzz) for fuzzy string matching.                                               |
+| **`ScoredMultiVectorRetriever`** | `rag_lib.retrieval.scored_retriever` | Multi-Vector Retriever that aggregates similarity scores (MAX) from chunks to parents. Supports `score_threshold`. |
 
 ### 5.2. Composition & Reranking
 
 Located in `rag_lib.retrieval.composition`.
 
-| Helper Function                     | Description                                                                                                                                       |
-| :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`create_ensemble_retriever`**     | Combines multiple retrievers (e.g., BM25 + Vector) using **Reciprocal Rank Fusion (RRF)**.                                                        |
-| **`create_reranking_retriever`**    | Wraps a retriever with a **Cross-Encoder** (e.g., BGE-Reranker) to re-score and filter the top-N results.                                         |
-| **`create_dual_storage_retriever`** | Sets up a **Multi-Vector** system: Searches low-dim vectors/summaries, but retrieves full documents from a separate Store (e.g., Redis/Postgres). |
+| Helper Function                            | Description                                                                                                                                       |
+| :----------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`create_ensemble_retriever`**            | Combines multiple retrievers (e.g., BM25 + Vector) using **Reciprocal Rank Fusion (RRF)**.                                                        |
+| **`create_reranking_retriever`**           | Wraps a retriever with a **Cross-Encoder** (e.g., BGE-Reranker) to re-score and filter the top-N results.                                         |
+| **`create_dual_storage_retriever`**        | Sets up a **Multi-Vector** system: Searches low-dim vectors/summaries, but retrieves full documents from a separate Store (e.g., Redis/Postgres). |
+| **`create_scored_dual_storage_retriever`** | Same as above, but returns `ScoredMultiVectorRetriever` which injects aggregated relevance scores into parent metadata.                           |
 
 ---
 
@@ -159,15 +168,19 @@ from rag_lib.summarizers.table_llm import LLMTableSummarizer
 summarizer = LLMTableSummarizer(llm=my_langchain_llm)
 
 # 2. Load PDF
-loader = PDFLoader(
-    file_path="financial_report.pdf",
-    backend="lattice",  # Use 'lattice' for grid tables
     summarizer=summarizer
 )
 
-segments = loader.load()
+docs = loader.load()
 
-# resulting 'segments' list contains Table Segments (Markdown) and Text Segments.
+# 3. Create Segments
+# Since each doc is a table (in table mode) or text, we can wrap them into Segments
+# or split them further.
+from rag_lib.chunkers.token import TokenTextSplitter
+splitter = TokenTextSplitter(chunk_size=1000)
+segments = splitter.split_documents(docs)
+
+# resulting 'segments' list contains typed Segments.
 ```
 
 ### 6.2. Semantic Chunking & Indexing
@@ -179,7 +192,7 @@ from rag_lib.core.indexer import Indexer
 
 # 1. Chunk Text Semantically
 chunker = SemanticChunker(embeddings=my_embeddings, threshold=0.75)
-text_segments = chunker.split_text(raw_text) # Returns list of Segments
+text_segments = chunker.create_segments(raw_text) # Returns list of Segments
 
 # 2. Enrich Segments (Generate Titles/Keywords)
 enricher = SegmentEnricher(llm=my_chat_model)
@@ -193,14 +206,20 @@ idx.index(text_segments, batch_size=50)
 
 ```python
 from rag_lib.loaders.structured import StructuredLoader
+from rag_lib.chunkers.markdown_hierarchy import MarkdownHierarchySplitter
 
 # Define Regex Patterns for custom sections (optional)
 patterns = [
     {"level": 2, "pattern": r"^Article \d+"}, # Treat "Article X" as Level 2 functionality
 ]
 
-loader = StructuredLoader("contract.docx", regex_patterns=patterns)
-segments = loader.load()
+loader = StructuredLoader("contract.docx") # Regex patterns now applied in Splitter if using RegexHierarchySplitter
+docs = loader.load()
+
+# Split by Hierarchy
+# Use MarkdownHierarchySplitter to parse the headers from the loaded Markdown
+splitter = MarkdownHierarchySplitter()
+segments = splitter.split_documents(docs)
 
 # Inspect hierarchy
 for seg in segments:

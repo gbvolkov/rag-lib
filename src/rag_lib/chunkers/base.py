@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Callable, Iterable
+from typing import List, Callable, Iterable, Optional, Dict, Any
 import uuid
-from rag_lib.core.domain import Segment
+from rag_lib.core.domain import Segment, Document
 
 class TextSplitter(ABC):
     """
@@ -25,6 +25,51 @@ class TextSplitter(ABC):
         Accepts a raw string and returns a list of chunk strings.
         """
         pass
+
+    def create_segments(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[Segment]:
+        """
+        Creates root segments from a raw text string (e.g. from a Document).
+        """
+        if metadata is None:
+            metadata = {}
+        
+        chunks = self.split_text(text)
+        final_segments = []
+        search_start_idx = 0
+        
+        for i, chunk_content in enumerate(chunks):
+            # Calculate start_index (best effort)
+            start_index = text.find(chunk_content, search_start_idx)
+            if start_index != -1:
+                search_start_idx = start_index + len(chunk_content)
+            
+            chunk_meta = metadata.copy()
+            chunk_meta.update({
+                "chunk_index": i,
+                "chunk_total": len(chunks),
+                "start_index": start_index,
+                "split_strategy": self.__class__.__name__
+            })
+            
+            new_seg = Segment(
+                content=chunk_content,
+                metadata=chunk_meta,
+                segment_id=str(uuid.uuid4()),
+                level=0 
+            )
+            final_segments.append(new_seg)
+            
+        return final_segments
+
+    def split_documents(self, documents: Iterable[Document]) -> List[Segment]:
+        """
+        Splits a list of Documents into Segments.
+        """
+        all_segments = []
+        for doc in documents:
+            segments = self.create_segments(doc.page_content, metadata=doc.metadata)
+            all_segments.extend(segments)
+        return all_segments
 
     def split_segments(self, segments: Iterable[Segment]) -> List[Segment]:
         """

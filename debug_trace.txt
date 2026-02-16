@@ -1,0 +1,23 @@
+--- 01_text_basic.py: Basic Text Processing with Loader & Document Pipeline ---
+Loading terms&defs.txt using TextLoader...
+Loaded 1 document(s).
+Segmentation (rag_lib.RegexSplitter: Document -> Segments)...
+Created 526 logical segments from document.
+Chunking (rag_lib.TokenTextSplitter: Segments -> Chunks)...
+Generated 606 chunks from 526 logical segments.
+Saved segments to C:\Projects\rag-lib\docs\results\01_text_basic_segments_20260216_112506.json
+Saved chunks_detailed to C:\Projects\rag-lib\docs\results\01_text_basic_chunks_detailed_20260216_112506.json
+Indexing chunks and setting up Dual Storage...
+Imported from langchain_classic
+Vector store initialized: Chroma
+2026-02-16 11:25:11 - rag_lib - INFO - Storing 526 documents in DocStore...
+DEBUG: Indexer storing 526 items in DocStore. Sample ID: 22f993e2-95ca-4639-97ec-cd27af6b8953
+DEBUG: Immediate verification of DocStore. Key '22f993e2-95ca-4639-97ec-cd27af6b8953' found? True
+2026-02-16 11:25:11 - rag_lib - INFO - Successfully populated DocStore.
+2026-02-16 11:25:11 - rag_lib - INFO - Indexing 606 segments with batch_size=100
+Retrieving for query: '1С:CRM'...
+DEBUG: Vector Hit Metadata: {'source': 'C:\\Projects\\rag-lib\\docs\\terms&defs.txt', 'chunk_total': 2, 'content': '##Term: 1С:CRM\n##Definition: – программное обеспечение 1С: Предприятие, предназначенное для: \n\uf0a7 автоматизированного учета, хранения и обработки информации и документов в целях взаимодействия с клиентами, \n\uf0a7 регулирования основных бизнес-процессов на всех этапах прохождения лизинговой заявки, а также процессов учета, планирования, контроля, м', 'is_summary_embedding': False, 'chunk_index': 0, 'start_index': 0, 'segment_id': '26ab3ca4-d332-486b-85f1-b4a9993c8c77', 'type': 'text', 'original_format': 'text', 'split_strategy': 'TokenTextSplitter', 'parent_id': '67601f3b-65d2-4009-8fdd-fdb2747e4cff'}
+DEBUG: DocStore Lookup for 67601f3b-65d2-4009-8fdd-fdb2747e4cff: found=False
+Error: Retriever returned no results.
+Saved retrieved_data to C:\Projects\rag-lib\docs\results\01_text_basic_retrieved_data_20260216_112520.json
+Done.

@@ -1,39 +1,77 @@
 import uuid
 from typing import List, Optional, Any, Dict
-from rag_lib.core.domain import Segment, SegmentType
+from rag_lib.core.domain import Document
+from rag_lib.config import Settings
+from rag_lib.summarizers.table import TableSummarizer
+from rag_lib.core.logger import logger
 
-# Optional import
+# Optional imports
 try:
     import camelot
 except ImportError:
     camelot = None
 
-from rag_lib.config import Settings
-from rag_lib.summarizers.table import TableSummarizer
-from rag_lib.core.logger import logger
+try:
+    import pypdf
+except ImportError:
+    pypdf = None
 
 class PDFLoader:
     """
-    Loads PDF files, specializing in high-fidelity table extraction using Camelot.
+    Loads PDF files.
+    Mode 'text' (default): Extracts text using pypdf. Returns 1 Document per file.
+    Mode 'table': Extracts tables using Camelot. Returns 1 Document per Table.
     """
-    def __init__(self, file_path: str, summarizer: Optional[TableSummarizer] = None, backend: Optional[str] = None):
+    def __init__(self, file_path: str, mode: str = "text", summarizer: Optional[TableSummarizer] = None, backend: Optional[str] = None):
         self.file_path = file_path
+        self.mode = mode
         self.summarizer = summarizer
         
-        # Determine backend
+        # Backend for Camelot
         if backend is None:
             backend = Settings().ingestion.default_pdf_backend
         self.backend = backend
 
-        if camelot is None:
-            logger.error("camelot-py not found.")
-            raise ImportError("camelot-py is required for PDFLoader. Install with `pip install camelot-py[cv]`")
-
-    def load(self) -> List[Segment]:
-        logger.info(f"Loading PDF: {self.file_path} using backend={self.backend}")
-        segments: List[Segment] = []
+    def load(self) -> List[Document]:
+        logger.info(f"Loading PDF: {self.file_path} mode={self.mode}")
         
-        # Extract Tables using Camelot
+        if self.mode == "text":
+            return self._load_text()
+        elif self.mode == "table":
+            return self._load_tables()
+        else:
+            raise ValueError(f"Unknown mode {self.mode}. Use 'text' or 'table'.")
+
+    def _load_text(self) -> List[Document]:
+        if pypdf is None:
+             raise ImportError("pypdf is required for PDFLoader(mode='text'). Install `pip install pypdf`.")
+        
+        try:
+            reader = pypdf.PdfReader(self.file_path)
+            text_content = []
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    text_content.append(page_text)
+            
+            full_text = "\n\n".join(text_content)
+            
+            metadata = {
+                "source": self.file_path,
+                "page_count": len(reader.pages)
+            }
+            
+            return [Document(page_content=full_text, metadata=metadata)]
+            
+        except Exception as e:
+            logger.error(f"Failed to load PDF text: {e}")
+            raise RuntimeError(f"Failed to load PDF text: {e}")
+
+    def _load_tables(self) -> List[Document]:
+        if camelot is None:
+            raise ImportError("camelot-py is required for PDFLoader(mode='table'). Install with `pip install camelot-py[cv]`")
+            
+        documents = []
         try:
             tables = camelot.read_pdf(
                 self.file_path, 
@@ -42,7 +80,7 @@ class PDFLoader:
             )
             logger.debug(f"Found {len(tables)} tables in {self.file_path}")
         except Exception as e:
-            # Enhanced error message for common Poppler missing error
+             # Handle common poppler error
             msg = str(e)
             if ("poppler" in msg.lower() or "not found" in msg.lower()) and self.backend == "poppler":
                 error_msg = (
@@ -57,16 +95,13 @@ class PDFLoader:
             raise RuntimeError(f"Camelot extraction failed: {e}")
 
         for i, table in enumerate(tables):
-            # table.df is a pandas DataFrame
             df = table.df
             
             # Convert to Markdown
-            # Pandas to_markdown requires 'tabulate'
             try:
                 markdown = df.to_markdown(index=False)
             except ImportError:
-                 # Fallback manual conversion if tabulate missing
-                 markdown = df.to_csv(sep="|") # Crude fallback, but tabulate is standard
+                markdown = df.to_csv(sep="|")
             
             metadata={
                 "source": self.file_path,
@@ -74,21 +109,12 @@ class PDFLoader:
                 "table_index": i
             }
 
-            # Generate Summary if summarizer is available
             if self.summarizer:
                 try:
                     metadata["summary"] = self.summarizer.summarize(markdown)
                 except Exception as e:
-                     # Don't fail the whole load if summary fails
                      metadata["summary_error"] = str(e)
 
-            seg = Segment(
-                content=markdown,
-                segment_id=str(uuid.uuid4()),
-                type=SegmentType.TABLE,
-                original_format="markdown",
-                metadata=metadata
-            )
-            segments.append(seg)
+            documents.append(Document(page_content=markdown, metadata=metadata))
             
-        return segments
+        return documents

@@ -27,9 +27,11 @@ dependencies = [
     "faiss-cpu>=1.7.0",
     "qdrant-client>=1.7.0",
     "psycopg2-binary>=2.9.0",
-    "yandex-chain>=0.0.1", 
+    "yandex-chain>=0.0.1",
     "mistralai>=0.1.0",
-    "networkx>=3.0"
+    "networkx>=3.0",
+    "pip>=26.0.1",
+    "pypdf>=6.7.0",
 ]
 requires-python = ">=3.9"
 
