@@ -22,11 +22,13 @@ class SegmentEnricher:
             "You are a metadata extraction system. Analyze the following text segment.\n"
             "Extract the following metadata directly:\n"
             "1. Title (A short, descriptive title for this segment)\n"
-            "2. Keywords (Comma-separated list of top 5 keywords)\n\n"
+            "2. Keywords (Comma-separated list of top 5 keywords)\n"
+            "3. Summary (A concise one-line summary of the content)\n\n"
             "Text Segment:\n{text}\n\n"
             "Output Format:\n"
             "Title: <title>\n"
-            "Keywords: <keywords>"
+            "Keywords: <keywords>\n"
+            "Summary: <summary>"
         )
 
     def enrich(self, segments: List[Segment]) -> List[Segment]:
@@ -62,18 +64,32 @@ class SegmentEnricher:
         lines = content.strip().split('\n')
         title = "Untitled"
         keywords = []
+        summary = ""
         
         for line in lines:
+            line = line.strip()
             if line.lower().startswith("title:"):
                 title = line.split(":", 1)[1].strip()
             elif line.lower().startswith("keywords:"):
                 k_str = line.split(":", 1)[1].strip()
                 keywords = [k.strip() for k in k_str.split(',') if k.strip()]
+            elif line.lower().startswith("summary:"):
+                summary = line.split(":", 1)[1].strip()
         
         # Update Metadata
         segment.metadata["generated_title"] = title
         segment.metadata["keywords"] = keywords
-        logger.debug(f"Enriched {segment.segment_id}: Title='{title}', Keywords={keywords}")
+        segment.metadata["summary"] = summary
+        
+        # Inject metadata into content for better retrieval context
+        rich_header = (
+            f"Title: {title}\n"
+            f"Keywords: {', '.join(keywords)}\n"
+            f"Summary: {summary}\n\n"
+        )
+        segment.content = rich_header + segment.content
+        
+        logger.debug(f"Enriched {segment.segment_id}: Title='{title}', Keywords={keywords}, Summary='{summary}'")
 
     async def aenrich(self, segments: List[Segment]) -> List[Segment]:
         """Async version of enrich"""
@@ -96,13 +112,28 @@ class SegmentEnricher:
         lines = content.strip().split('\n')
         title = "Untitled"
         keywords = []
+        summary = ""
         
         for line in lines:
+            line = line.strip()
             if line.lower().startswith("title:"):
                 title = line.split(":", 1)[1].strip()
             elif line.lower().startswith("keywords:"):
                 k_str = line.split(":", 1)[1].strip()
                 keywords = [k.strip() for k in k_str.split(',') if k.strip()]
+            elif line.lower().startswith("summary:"):
+                summary = line.split(":", 1)[1].strip()
         
         segment.metadata["generated_title"] = title
         segment.metadata["keywords"] = keywords
+        segment.metadata["summary"] = summary
+        
+        # Inject metadata into content
+        rich_header = (
+            f"Title: {title}\n"
+            f"Keywords: {', '.join(keywords)}\n"
+            f"Summary: {summary}\n\n"
+        )
+        segment.content = rich_header + segment.content
+        
+        logger.debug(f"Enriched {segment.segment_id}: Title='{title}', Keywords={keywords}, Summary='{summary}'")

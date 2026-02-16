@@ -1,22 +1,19 @@
 import re
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
+from rag_lib.core.domain import Segment
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
-try:
-    from rapidfuzz import process, fuzz
-except ImportError:
-    process = None
-    fuzz = None
+from rapidfuzz import process, fuzz
 
 class RegexRetriever(BaseRetriever):
     """
     Retriever that scans documents for regex patterns.
     Useful for ID lookups, code referencing, or specific format matching.
     """
-    documents: List[Document]
+    documents: List[Union[Document, Segment]]
     
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -42,8 +39,12 @@ class RegexRetriever(BaseRetriever):
             return []
             
         for doc in self.documents:
-            if pattern.search(doc.page_content) or pattern.search(str(doc.metadata)):
-                results.append(doc)
+            content = doc.content if isinstance(doc, Segment) else doc.page_content
+            if pattern.search(content) or pattern.search(str(doc.metadata)):
+                if isinstance(doc, Segment):
+                    results.append(doc.to_langchain())
+                else:
+                    results.append(doc)
         
         return results
 
@@ -52,8 +53,9 @@ class FuzzyRetriever(BaseRetriever):
     Retriever that uses approximate string matching (Levenshtein distance).
     Useful for typo-tolerant lookups of names, IDs, or short phrases.
     """
-    documents: List[Document]
+    documents: List[Union[Document, Segment]]
     threshold: int = 80 # 0-100 score
+    mode: str = "partial_ratio" # "partial_ratio", "ratio", "token_set_ratio", "wratio"
     
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -61,22 +63,40 @@ class FuzzyRetriever(BaseRetriever):
         if not process:
             raise ImportError("rapidfuzz is required for FuzzyRetriever. Please install it.")
             
-        # We search against page_content
-        choices = [doc.page_content for doc in self.documents]
+        scorers = {
+            "partial_ratio": fuzz.partial_ratio,
+            "ratio": fuzz.ratio,
+            "token_set_ratio": fuzz.token_set_ratio,
+            "wratio": fuzz.WRatio
+        }
+        
+        scorer = scorers.get(self.mode.lower(), fuzz.partial_ratio)
+
+        # We search against page_content or content
+        choices = [doc.content if isinstance(doc, Segment) else doc.page_content for doc in self.documents]
         
         # Extract top matches
         # process.extract returns list of (match, score, index)
         matches = process.extract(
             query, 
             choices, 
-            scorer=fuzz.partial_ratio, 
+            scorer=scorer, 
             limit=len(self.documents),
             score_cutoff=self.threshold
         )
         
         results = []
         for match, score, index in matches:
-            results.append(self.documents[index])
+            doc = self.documents[index]
+            if isinstance(doc, Segment):
+                retrieved_doc = doc.to_langchain()
+            else:
+                # Create a copy to avoid mutating the original document in the store/list
+                retrieved_doc = Document(page_content=doc.page_content, metadata=doc.metadata.copy())
+            
+            # Inject score
+            retrieved_doc.metadata["fuzzy_score"] = score
+            results.append(retrieved_doc)
             
         return results
 
@@ -99,14 +119,22 @@ def get_vector_retriever(
     )
 
 def get_bm25_retriever(
-    documents: List[Document],
+    documents: List[Union[Document, Segment]],
     k: int = 4
 ) -> BM25Retriever:
     """
     Factory for BM25 Retriever (In-Memory).
     Note: Requires all documents to be loaded in memory to build the index.
     """
-    return BM25Retriever.from_documents(documents, k=k)
+    # Convert Segments to LangChain Documents for BM25Retriever compatibility
+    lc_docs = []
+    for doc in documents:
+        if isinstance(doc, Segment):
+            lc_docs.append(doc.to_langchain())
+        else:
+            lc_docs.append(doc)
+            
+    return BM25Retriever.from_documents(lc_docs, k=k)
 
 def get_graph_retriever(
     graph_store: Any, # BaseGraphStore

@@ -1,6 +1,8 @@
 import os
 import sys
 import shutil
+import json
+import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -93,3 +95,25 @@ def load_pdf_text(file_path: Path) -> Segment:
     except Exception as e:
         print(f"Error loading PDF {file_path.name}: {e}")
         return None
+
+def save_json_results(data, script_name: str, artifact_type: str):
+    """
+    Saves data to docs/results/<script_name>_<artifact_type>_<timestamp>.json
+    """
+    results_dir = Path(__file__).parent.parent / "docs" / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{script_name}_{artifact_type}_{timestamp}.json"
+    filepath = results_dir / filename
+    
+    # Helper to serialize objects (like Segment or Document)
+    def default_serializer(o):
+        if hasattr(o, "dict"):
+            return o.dict()
+        if hasattr(o, "__dict__"):
+            return o.__dict__
+        return str(o)
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False, default=default_serializer)
+    print(f"Saved {artifact_type} to {filepath}")
