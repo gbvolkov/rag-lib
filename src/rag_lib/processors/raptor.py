@@ -17,7 +17,8 @@ class RaptorProcessor:
         llm: BaseChatModel, 
         embeddings: Embeddings,
         max_levels: int = 3,
-        clustering_service: Optional[ClusteringService] = None
+        clustering_service: Optional[ClusteringService] = None,
+        summary_prompt_template: str | None = None,
     ):
         self.llm = llm
         self.embeddings = embeddings
@@ -25,7 +26,10 @@ class RaptorProcessor:
         
         # Initialize components
         self.clustering = clustering_service or ClusteringService()
-        self.summarizer = ClusterSummarizer(llm=llm)
+        self.summarizer = ClusterSummarizer(
+            llm=llm,
+            summary_prompt_template=summary_prompt_template,
+        )
         self.builder = TreeBuilder(
             clustering_service=self.clustering,
             summarizer=self.summarizer,

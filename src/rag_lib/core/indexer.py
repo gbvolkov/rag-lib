@@ -108,6 +108,8 @@ class Indexer:
             # but if using DocStore, it is redundant but harmless.
             payload["content"] = seg.content 
             payload["segment_id"] = seg.segment_id
+            if seg.parent_id:
+                payload["parent_id"] = seg.parent_id
             payload["type"] = seg.type.value
             payload["original_format"] = seg.original_format or "text"
             
@@ -177,6 +179,8 @@ class Indexer:
             payload = seg.metadata.copy()
             payload["content"] = seg.content
             payload["segment_id"] = seg.segment_id
+            if seg.parent_id:
+                payload["parent_id"] = seg.parent_id
             payload["type"] = seg.type.value
             payload["original_format"] = seg.original_format or "text"
             

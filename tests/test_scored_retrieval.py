@@ -46,17 +46,20 @@ class TestScoredRetriever(unittest.TestCase):
         # Since FakeEmbeddings are random, scores will be random but non-zero.
         results = retriever.invoke("High Match")
         
-        self.assertTrue(results, "Should return at least one parent")
-        retrieved_doc = results[0]
-        
-        print(f"Retrieved Parent Metadata: {retrieved_doc.metadata}")
-        
+        self.assertTrue(results, "Should return scored documents")
+
         # 5. Assertions
-        self.assertIn("max_similarity_score", retrieved_doc.metadata, "Metadata should contain 'max_similarity_score'")
-        self.assertIsInstance(retrieved_doc.metadata["max_similarity_score"], float, "Score should be a float")
-        self.assertEqual(retrieved_doc.page_content, "Parent Content", "Should retrieve correct parent")
-        
-        print(f"Aggregated Score: {retrieved_doc.metadata['max_similarity_score']}")
+        # Default mode restores dual-store hydration (dedup by parent).
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].page_content, "Parent Content")
+        self.assertEqual(results[0].metadata.get("parent_id"), parent_id)
+
+        for doc in results:
+            self.assertIn("max_similarity_score", doc.metadata, "Each result should have max_similarity_score")
+            self.assertIsInstance(doc.metadata["max_similarity_score"], float, "Score should be a float")
+            self.assertIsNotNone(doc.id, "Retrieved document should have non-null id")
+
+        print(f"Retrieved docs: {[doc.page_content for doc in results]}")
         print("--- Test Passed ---")
 
 if __name__ == "__main__":

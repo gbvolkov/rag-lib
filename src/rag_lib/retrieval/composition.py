@@ -66,7 +66,11 @@ def create_dual_storage_retriever(
     )
     return retriever
 
-from rag_lib.retrieval.scored_retriever import ScoredMultiVectorRetriever, SearchType
+from rag_lib.retrieval.scored_retriever import (
+    ScoredMultiVectorRetriever,
+    SearchType,
+    HydrationMode,
+)
 
 def create_scored_dual_storage_retriever(
     vector_store: VectorStore,
@@ -74,12 +78,16 @@ def create_scored_dual_storage_retriever(
     id_key: str = "segment_id",
     search_kwargs: Optional[Dict[str, Any]] = None,
     search_type: SearchType = SearchType.similarity,
-    score_threshold: float | None = None
+    score_threshold: float | None = None,
+    hydration_mode: HydrationMode = HydrationMode.parents_replace,
+    enrichment_separator: str = "\n\n--- MATCHED CHILD CHUNK ---\n\n",
 ) -> BaseRetriever:
     """
     Creates a ScoredMultiVectorRetriever.
-    Like Dual Storage, but returns Parent Documents with aggregated Similarity Scores (max) from chunks.
-    Metadata 'max_similarity_score' is added to the parent document.
+    Strict parent/child semantics:
+    - Child: vector-store hit
+    - Parent: doc-store document loaded by child `id_key`
+    Parent scores are computed only from retrieved children.
     """
     return ScoredMultiVectorRetriever(
         vectorstore=vector_store,
@@ -87,7 +95,9 @@ def create_scored_dual_storage_retriever(
         id_key=id_key,
         search_kwargs=search_kwargs or {},
         search_type=search_type,
-        score_threshold=score_threshold
+        score_threshold=score_threshold,
+        hydration_mode=hydration_mode,
+        enrichment_separator=enrichment_separator,
     )
 
 def create_reranking_retriever(

@@ -121,12 +121,18 @@ def main():
     # 4. RAPTOR Processing
     llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
     embeddings = get_embeddings_model(provider="openai")
+    summary_prompt_template = None
 
     print("Initializing RAPTOR Processor...")
+    if summary_prompt_template is None:
+        print("RAPTOR summary prompt: default template.")
+    else:
+        print("RAPTOR summary prompt: custom template.")
     processor = RaptorProcessor(
         llm=llm,
         embeddings=embeddings,
         max_levels=3,
+        summary_prompt_template=summary_prompt_template,
         # threshold=0.5 # GMM Threshold - Not supported in RaptorProcessor init currently
     )
 
@@ -156,27 +162,47 @@ def main():
 
     save_json_results(raptor_tree, "04_pdf_raptor", "raptor_tree")
 
+    # Imports for Dual Storage
+    from rag_lib.retrieval.composition import create_scored_dual_storage_retriever, HydrationMode
+    from langchain_core.stores import InMemoryStore
+
     # 5. Index
     print("\nIndexing into Chroma (04_pdf_raptor)...")
+    doc_store = InMemoryStore()
+
     vector_store = get_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name="04_pdf_raptor",
     )
-    indexer = Indexer(vector_store=vector_store, embeddings=embeddings)
-    indexer.index(raptor_tree)
+    indexer = Indexer(vector_store=vector_store, embeddings=embeddings, doc_store=doc_store)
+    indexer.index(raptor_tree, parents=raptor_tree)
+
+
 
     # 6. Retrieve (Hierarchical)
     # We can query specific levels or the whole tree
     print("\nRetrieving from RAPTOR Tree...")
-    retriever = get_vector_retriever(
-        vector_store=vector_store,
-        k=3,
-        search_type="similarity_score_threshold",
-        score_threshold=0.0,
-    )
+    use_dual = True
+    if not use_dual:
+        retriever = get_vector_retriever(
+            vector_store=vector_store,
+            k=10,
+            search_type="similarity_score_threshold",
+            score_threshold=0.0,
+        )
+    else:
+        retriever = create_scored_dual_storage_retriever(
+            vector_store=vector_store,
+            docstore=doc_store,
+            id_key="parent_id",
+            search_kwargs={"k": 10},
+            search_type="similarity_score_threshold",
+            hydration_mode=HydrationMode.children_enriched
+            #score_threshold=None,
+        )
 
-    query = "backend developer experience"
+    query = "CIO Europe"
     if "statement" in str(pdf_path).lower():
         query = "balance summary"
 
@@ -192,7 +218,7 @@ def main():
         metadata = res.metadata or {}
         is_summary = bool(metadata.get("is_raptor_summary"))
         node_type = "SUMMARY" if is_summary else "LEAF"
-        level = metadata.get("raptor_level", 0 if not is_summary else "?")
+        level = metadata.get("raptor_level", "?" if is_summary else 0)
         print(f"[{i}] [{node_type} L{level}] {res.page_content[:150]}...")
 
 if __name__ == "__main__":

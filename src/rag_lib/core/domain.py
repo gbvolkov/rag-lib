@@ -45,4 +45,8 @@ class Segment(BaseModel):
         meta["type"] = self.type.value
         meta["original_format"] = self.original_format
         
-        return Document(page_content=self.content, metadata=meta)
+        return Document(
+            id=self.segment_id,
+            page_content=self.content,
+            metadata=meta,
+        )
