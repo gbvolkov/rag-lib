@@ -11,7 +11,8 @@ from example_utils import setup_environment, print_section, save_json_results
 
 # 1. Imports - Library Abstractions ONLY
 from rag_lib.loaders.pdf import PDFLoader
-from rag_lib.chunkers.recursive import RecursiveCharacterTextSplitter
+from rag_lib.chunkers.sentence import SentenceSplitter
+from rag_lib.chunkers.language import detect_nltk_language
 from rag_lib.core.domain import Segment, SegmentType
 from rag_lib.processors.raptor import RaptorProcessor
 from rag_lib.llm.factory import get_llm
@@ -87,9 +88,11 @@ def main():
     print(f"Extracted {len(raw_text)} characters.")
 
     # 3. Initial split to leaves
-    # RAPTOR needs many small leaf segments to cluster.
-    print("Generating leaf segments with RecursiveCharacterTextSplitter...")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=20)
+    # Detect language first and route sentence tokenization accordingly.
+    detected_language = detect_nltk_language(raw_text)
+    print(f"Detected text language for tokenization: {detected_language}")
+    print("Generating leaf segments with SentenceSplitter...")
+    splitter = SentenceSplitter(chunk_size=200, chunk_overlap=20, language=detected_language)
     leaf_texts = splitter.split_text(raw_text)
 
     leaf_segments = [
@@ -166,7 +169,12 @@ def main():
     # 6. Retrieve (Hierarchical)
     # We can query specific levels or the whole tree
     print("\nRetrieving from RAPTOR Tree...")
-    retriever = get_vector_retriever(vector_store=vector_store, k=3)
+    retriever = get_vector_retriever(
+        vector_store=vector_store,
+        k=3,
+        search_type="similarity_score_threshold",
+        score_threshold=0.0,
+    )
 
     query = "backend developer experience"
     if "statement" in str(pdf_path).lower():

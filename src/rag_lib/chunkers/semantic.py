@@ -8,6 +8,7 @@ from nltk.tokenize import sent_tokenize
 from rag_lib.config import Settings
 from rag_lib.core.logger import logger
 from rag_lib.chunkers.base import TextSplitter
+from rag_lib.chunkers.language import resolve_nltk_language
 
 class SemanticChunker(TextSplitter):
     """
@@ -19,6 +20,7 @@ class SemanticChunker(TextSplitter):
         embeddings: Embeddings,
         threshold: Optional[float] = None,
         window_size: int = 1,
+        language: str = "auto",
         threshold_type: str = "fixed",
         percentile_threshold: int = 90,
         local_percentile_window: int = 50,
@@ -32,6 +34,7 @@ class SemanticChunker(TextSplitter):
             threshold: Fixed cosine similarity threshold. Defaults to config if None.
             window_size: Number of sentences to look ahead when building contextual vectors.
                         window_size=1 compares adjacent sentence embeddings directly.
+            language: NLTK tokenizer language or "auto" for lightweight detection.
             threshold_type: "fixed", "percentile", or "percentile_local".
             percentile_threshold: If "percentile", the percentile of similarity to use as threshold.
             local_percentile_window: For "percentile_local", number of boundaries to include
@@ -59,6 +62,7 @@ class SemanticChunker(TextSplitter):
         self.embeddings = embeddings
         self.threshold = threshold
         self.window_size = window_size
+        self.language = language
         self.threshold_type = threshold_type
         self.percentile_threshold = percentile_threshold
         self.local_percentile_window = local_percentile_window
@@ -119,10 +123,16 @@ class SemanticChunker(TextSplitter):
         self._ensure_sentence_tokenizer()
 
         # 1. Split into Sentences
-        sentences = sent_tokenize(text)
+        tokenizer_language = resolve_nltk_language(self.language, text)
+        try:
+            sentences = sent_tokenize(text, language=tokenizer_language)
+        except LookupError:
+            sentences = sent_tokenize(text)
+
         if len(sentences) <= 1:
             if self.enable_debug:
                 self._last_debug_info = {
+                    "tokenizer_language": tokenizer_language,
                     "window_size": self.window_size,
                     "threshold_type": self.threshold_type,
                     "configured_threshold": float(self.threshold),
@@ -233,6 +243,7 @@ class SemanticChunker(TextSplitter):
 
         if self.enable_debug:
             self._last_debug_info = {
+                "tokenizer_language": tokenizer_language,
                 "window_size": self.window_size,
                 "threshold_type": self.threshold_type,
                 "configured_threshold": float(self.threshold),

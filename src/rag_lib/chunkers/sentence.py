@@ -2,6 +2,7 @@ from typing import List, Callable, Optional
 import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
 from rag_lib.chunkers.base import TextSplitter
+from rag_lib.chunkers.language import resolve_nltk_language
 
 # Ensure punkt is available
 try:
@@ -20,18 +21,22 @@ class SentenceSplitter(TextSplitter):
         chunk_size: int = 4000, 
         chunk_overlap: int = 200, 
         length_function: Callable[[str], int] = len,
-        language: str = "russian"
+        language: str = "auto"
     ):
         super().__init__(chunk_size, chunk_overlap, length_function)
         self.language = language
+        self._active_language = "english"
 
     def split_text(self, text: str) -> List[str]:
         """
         Splits text into chunks composed of sentences.
         """
+        tokenizer_language = resolve_nltk_language(self.language, text)
+        self._active_language = tokenizer_language
+
         # 1. Tokenize into sentences
         try:
-            sentences = sent_tokenize(text, language=self.language)
+            sentences = sent_tokenize(text, language=tokenizer_language)
         except LookupError:
              # Fallback if specific language fails
              sentences = sent_tokenize(text)
@@ -143,7 +148,10 @@ class SentenceSplitter(TextSplitter):
 
     def _split_long_sentence(self, sentence: str, max_chunk_size: int) -> List[str]:
         # Simple whitespace fallback for now, or word_tokenize
-        words = word_tokenize(sentence, language=self.language)
+        try:
+            words = word_tokenize(sentence, language=self._active_language)
+        except LookupError:
+            words = sentence.split()
         return self._accumulate_words(words, max_chunk_size)
 
     def _accumulate_words(self, words: List[str], max_chunk_size: int) -> List[str]:
