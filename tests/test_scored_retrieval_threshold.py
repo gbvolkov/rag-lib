@@ -28,7 +28,7 @@ class MockVectorStore(VectorStore):
 
 class TestScoredRetrieverThreshold(unittest.TestCase):
     def test_threshold_passing(self):
-        print("\n--- Testing Search Threshold Passing ---")
+        print("\n--- Testing Score Threshold Passing ---")
         
         # 1. Mock VectorStore
         mock_vectorstore = MockVectorStore()
@@ -55,7 +55,7 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
             docstore=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
-            search_threshold=threshold
+            score_threshold=threshold
         )
         
         # 4. Invoke
@@ -70,6 +70,18 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         self.assertEqual(kwargs["score_threshold"], threshold, "score_threshold should match")
         
         print("--- Threshold Passed correctly to VectorStore ---")
+
+    def test_search_threshold_is_rejected(self):
+        mock_vectorstore = MockVectorStore()
+        doc_store = InMemoryStore()
+        with self.assertRaises(ValueError):
+            ScoredMultiVectorRetriever(
+                vectorstore=mock_vectorstore,
+                docstore=doc_store,
+                id_key="pid",
+                search_type=SearchType.similarity_score_threshold,
+                search_threshold=0.5,
+            )
 
 if __name__ == "__main__":
     unittest.main()

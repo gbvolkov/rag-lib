@@ -1,8 +1,12 @@
-from typing import List, Optional, Any
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from typing import List, Optional
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForRetrieverRun,
+    CallbackManagerForRetrieverRun,
+)
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import VectorStore
+from pydantic import ConfigDict
 from rag_lib.graph.store import BaseGraphStore
 from rag_lib.core.logger import logger
 
@@ -16,8 +20,7 @@ class GraphRetriever(BaseRetriever):
     mode: str = "local"  # "local", "global"
     search_depth: int = 1
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -74,22 +77,22 @@ class GraphRetriever(BaseRetriever):
         # 1. Start nodes: Keyword search on the graph
         start_nodes = self.store.search_nodes(query)
         logger.debug(f"Found {len(start_nodes)} starting nodes")
-
-        relevant_segments_ids = set()
         
         # 2. Traverse neighbors
         results = []
         for node in start_nodes:
-             content = f"Entity: {node.label}\nDescription: {node.description}\nType: {node.type}"
-             results.append(Document(page_content=content, metadata={"node_id": node.id, "source": "graph"}))
-             
-             neighbors = self.store.get_neighbors(node.id, depth=self.search_depth)
-             for n in neighbors:
-                 content = f"Related Entity: {n.label}\nRelation: Linked to {node.label}\nDescription: {n.description}"
-                 results.append(Document(page_content=content, metadata={"node_id": n.id, "source": "graph_neighbor"}))
+            content = f"Entity: {node.label}\nDescription: {node.description}\nType: {node.type}"
+            results.append(Document(page_content=content, metadata={"node_id": node.id, "source": "graph"}))
+
+            neighbors = self.store.get_neighbors(node.id, depth=self.search_depth)
+            for n in neighbors:
+                content = f"Related Entity: {n.label}\nRelation: Linked to {node.label}\nDescription: {n.description}"
+                results.append(Document(page_content=content, metadata={"node_id": n.id, "source": "graph_neighbor"}))
+        logger.info(f"Retrieved {len(results)} graph context documents")
+        return results
 
     async def _aget_relevant_documents(
-        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+        self, query: str, *, run_manager: AsyncCallbackManagerForRetrieverRun
     ) -> List[Document]:
         logger.info(f"Async Graph Retrieval query='{query}' mode='{self.mode}'")
         
@@ -124,13 +127,13 @@ class GraphRetriever(BaseRetriever):
 
         results = []
         for node in start_nodes:
-             content = f"Entity: {node.label}\nDescription: {node.description}\nType: {node.type}"
-             results.append(Document(page_content=content, metadata={"node_id": node.id, "source": "graph"}))
-             
-             neighbors = await self.store.aget_neighbors(node.id, depth=self.search_depth)
-             for n in neighbors:
-                 content = f"Related Entity: {n.label}\nRelation: Linked to {node.label}\nDescription: {n.description}"
-                 results.append(Document(page_content=content, metadata={"node_id": n.id, "source": "graph_neighbor"}))
+            content = f"Entity: {node.label}\nDescription: {node.description}\nType: {node.type}"
+            results.append(Document(page_content=content, metadata={"node_id": node.id, "source": "graph"}))
+
+            neighbors = await self.store.aget_neighbors(node.id, depth=self.search_depth)
+            for n in neighbors:
+                content = f"Related Entity: {n.label}\nRelation: Linked to {node.label}\nDescription: {n.description}"
+                results.append(Document(page_content=content, metadata={"node_id": n.id, "source": "graph_neighbor"}))
 
         logger.info(f"Retrieved {len(results)} graph context documents")
         return results

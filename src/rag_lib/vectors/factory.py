@@ -28,7 +28,8 @@ def get_vector_store(
     provider: str = "chroma",
     embeddings: Optional[Embeddings] = None,
     collection_name: str = "rag_collection",
-    connection_string: Optional[str] = None
+    connection_string: Optional[str] = None,
+    cleanup: bool = True,
 ) -> VectorStore:
     """
     Factory to get Vector Store instance.
@@ -38,6 +39,7 @@ def get_vector_store(
         embeddings: Initialized Embeddings model (required for most stores)
         collection_name: Name of the collection/table
         connection_string: DB URL for Postgres/Qdrant
+        cleanup: If True, delete existing collection before returning the store (Chroma).
     """
     if embeddings is None:
         raise ValueError("Embeddings model must be provided to initialize Vector Store.")
@@ -51,11 +53,23 @@ def get_vector_store(
         # Check if persistent or in-memory
         # For production, we use settings or default to a local dir
         persist_dir = settings.vector_store.path if settings.vector_store.path else "./chroma_db"
-        return Chroma(
-            collection_name=collection_name,
-            embedding_function=embeddings,
-            persist_directory=persist_dir
-        )
+
+        def _build_chroma() -> VectorStore:
+            return Chroma(
+                collection_name=collection_name,
+                embedding_function=embeddings,
+                persist_directory=persist_dir
+            )
+
+        if cleanup:
+            cleanup_store = _build_chroma()
+            try:
+                cleanup_store.delete_collection()
+            except Exception:
+                # If collection doesn't exist yet (or backend can't delete), continue.
+                pass
+
+        return _build_chroma()
         
     elif provider == "faiss":
         if FAISS is None:

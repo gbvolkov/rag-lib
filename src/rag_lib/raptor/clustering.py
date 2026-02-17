@@ -1,15 +1,8 @@
 import numpy as np
 from typing import Optional, List, Tuple
-from rag_lib.core.logger import logger
 
-# Try importing optional dependencies
-try:
-    import umap
-    from sklearn.mixture import GaussianMixture
-    HAS_RAPTOR_DEPS = True
-except ImportError as e:
-    logger.warning(f"RAPTOR dependencies missing: {e}")
-    HAS_RAPTOR_DEPS = False
+import umap
+from sklearn.mixture import GaussianMixture
 
 RANDOM_SEED = 224
 
@@ -20,11 +13,8 @@ class ClusteringService:
     """
 
     def __init__(self):
-        if not HAS_RAPTOR_DEPS:
-            raise ImportError(
-                "RAPTOR dependencies are not installed. "
-                "Please install with `pip install rag-lib[raptor]`"
-            )
+        # RAPTOR dependencies are required; missing deps should fail at import time.
+        pass
 
     def perform_clustering(
         self, 

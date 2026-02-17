@@ -32,8 +32,7 @@ class TestScoredRetrieverAsync(unittest.IsolatedAsyncioTestCase):
             docstore=doc_store,
             id_key="parent_id",
             search_kwargs={"k": 2},
-            search_type=SearchType.similarity_score_threshold,
-            search_threshold=0.0 # simple threshold
+            search_type=SearchType.similarity_score_threshold
         )
         
         # 4. Invoke Async

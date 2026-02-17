@@ -19,7 +19,7 @@ Features Tested:
 Expected Results:
 - Loading:
     - Input: "docs/statement.pdf"
-    - Method: MinerULoader (wraps magic-pdf).
+    - Method: MinerULoader (wraps mineru).
     - Success Case: Returns Segments with high-quality text layout.
     - Failure Case (Missing Deps): Prints "MinerU Load Failed" (Acceptable for Demo).
 - Indexing & Retrieval:
@@ -34,14 +34,11 @@ def main():
 
     # 2. Load
     pdf_path = Path(__file__).parent.parent / "docs" / "statement.pdf"
-    print(f"Loading {pdf_path} using MinerU (Magic-PDF)...")
+    print(f"Loading {pdf_path} using MinerU...")
     
-    # MinerU requires `magic-pdf` installed and configured.
-    # If not present, we should catch or expect error, but user wants E2E.
-    # Based on existing codebase, `MinerULoader` is a skeleton or wrapper.
-    # If real dependency is missing, it might fail.
-    # We'll try-except to show "Not Supported" if lib missing, 
-    # but strictly user asked for coverage.
+    # MinerU requires `mineru[all]` installed and configured.
+    # We use try/except so the example can still run in environments
+    # where MinerU optional dependencies are not installed.
     
     try:
         loader = MinerULoader(str(pdf_path))

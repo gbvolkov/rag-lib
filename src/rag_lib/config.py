@@ -7,15 +7,13 @@ class LLMSettings(BaseSettings):
     model: str = "base"
     temperature: float = 0.0
 
-    class Config:
-        env_prefix = "LLM_"
+    model_config = SettingsConfigDict(env_prefix="LLM_")
 
 class EmbeddingsSettings(BaseSettings):
     provider: str = "openai"
     model_name: Optional[str] = None
 
-    class Config:
-        env_prefix = "EMBEDDING_"
+    model_config = SettingsConfigDict(env_prefix="EMBEDDING_")
 
 class VectorStoreSettings(BaseSettings):
     provider: str = "chroma"
@@ -24,16 +22,14 @@ class VectorStoreSettings(BaseSettings):
     url: Optional[str] = None
     api_key: Optional[str] = None
 
-    class Config:
-        env_prefix = "VECTOR_"
+    model_config = SettingsConfigDict(env_prefix="VECTOR_")
 
 class IngestionSettings(BaseSettings):
     chunk_size: int = 100 # CSV rows
     semantic_threshold: float = 0.6
     default_pdf_backend: str = "poppler"
 
-    class Config:
-        env_prefix = "INGEST_"
+    model_config = SettingsConfigDict(env_prefix="INGEST_")
 
 class PromptSettings(BaseSettings):
     table_summarizer_template: str = (
@@ -44,8 +40,7 @@ class PromptSettings(BaseSettings):
         "Summary:"
     )
 
-    class Config:
-        env_prefix = "PROMPT_"
+    model_config = SettingsConfigDict(env_prefix="PROMPT_")
 
 class Settings(BaseSettings):
     """

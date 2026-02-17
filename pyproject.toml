@@ -32,8 +32,10 @@ dependencies = [
     "networkx>=3.0",
     "pip>=26.0.1",
     "pypdf>=6.7.0",
+    "pymupdf>=1.27.1",
+    "pymupdf4llm>=0.3.4",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12,<3.14"
 
 [project.optional-dependencies]
 dev = [
@@ -41,7 +43,7 @@ dev = [
     "pytest-cov>=5.0.0"
 ]
 miner_u = [
-    "magic-pdf>=0.6.0"
+    "mineru[all]"
 ]
 graph = [
     "neo4j>=5.15.0"
@@ -52,6 +54,10 @@ raptor = [
     "numpy>=1.20.0",
     "pandas>=2.0.0"
 ]
+pymupdf = [
+    "pymupdf>=1.24.0",
+    "pymupdf4llm>=0.0.17"
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -61,3 +67,4 @@ build-backend = "hatchling.build"
 pythonpath = "src"
 testpaths = ["tests"]
 python_files = "test_*.py"
+asyncio_default_fixture_loop_scope = "function"

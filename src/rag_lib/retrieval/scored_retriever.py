@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.stores import BaseStore, ByteStore
 from langchain_core.vectorstores import VectorStore
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from typing_extensions import override
 
 from langchain_classic.storage._lc_store import create_kv_docstore
@@ -28,6 +28,8 @@ class SearchType(str, Enum):
 
 class ScoredMultiVectorRetriever(BaseRetriever):
     """Retrieve from a set of multiple embeddings for the same document."""
+
+    model_config = ConfigDict(extra="forbid")
 
     vectorstore: VectorStore
     """The underlying `VectorStore` to use to store small chunks
@@ -53,6 +55,10 @@ class ScoredMultiVectorRetriever(BaseRetriever):
     @model_validator(mode="before")
     @classmethod
     def _shim_docstore(cls, values: dict) -> Any:
+        if "search_threshold" in values:
+            msg = "`search_threshold` is not supported. Use `score_threshold`."
+            raise ValueError(msg)
+
         byte_store = values.get("byte_store")
         docstore = values.get("docstore")
         if byte_store is not None:
@@ -156,8 +162,8 @@ class ScoredMultiVectorRetriever(BaseRetriever):
             )
         elif self.search_type == SearchType.similarity_score_threshold:
             kwargs = self.search_kwargs.copy()
-            if self.search_threshold is not None and "score_threshold" not in kwargs:
-                kwargs["score_threshold"] = self.search_threshold
+            if self.score_threshold is not None and "score_threshold" not in kwargs:
+                kwargs["score_threshold"] = self.score_threshold
 
             sub_docs_and_similarities = (
                 await self.vectorstore.asimilarity_search_with_relevance_scores(

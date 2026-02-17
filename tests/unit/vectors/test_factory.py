@@ -53,11 +53,12 @@ def test_get_postgres():
             use_jsonb=True
         )
 
-def test_faiss_error():
-    # FAISS usually not mockable as a class constructor in the same way if simple import
-    # But let's assume our factory logic raises NotImplementedError
-    with pytest.raises(NotImplementedError):
-        get_vector_store(provider="faiss", embeddings=mock_embeddings)
+def test_faiss_creation():
+    with patch("rag_lib.vectors.factory.FAISS") as mock_faiss:
+        mock_faiss.from_texts.return_value = "MockFaissStore"
+        store = get_vector_store(provider="faiss", embeddings=mock_embeddings)
+        mock_faiss.from_texts.assert_called_with([""], mock_embeddings)
+        assert store == "MockFaissStore"
 
 def test_missing_embeddings():
     with pytest.raises(ValueError):

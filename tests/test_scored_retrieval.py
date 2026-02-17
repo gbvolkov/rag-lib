@@ -6,6 +6,7 @@ from langchain_core.stores import InMemoryStore
 from langchain_chroma import Chroma
 from langchain_community.embeddings import FakeEmbeddings
 from rag_lib.retrieval.composition import create_scored_dual_storage_retriever
+from rag_lib.retrieval.scored_retriever import SearchType
 
 class TestScoredRetriever(unittest.TestCase):
     def test_scored_retrieval(self):
@@ -51,11 +52,11 @@ class TestScoredRetriever(unittest.TestCase):
         print(f"Retrieved Parent Metadata: {retrieved_doc.metadata}")
         
         # 5. Assertions
-        self.assertIn("score", retrieved_doc.metadata, "Metadata should contain 'score'")
-        self.assertIsInstance(retrieved_doc.metadata["score"], float, "Score should be a float")
+        self.assertIn("max_similarity_score", retrieved_doc.metadata, "Metadata should contain 'max_similarity_score'")
+        self.assertIsInstance(retrieved_doc.metadata["max_similarity_score"], float, "Score should be a float")
         self.assertEqual(retrieved_doc.page_content, "Parent Content", "Should retrieve correct parent")
         
-        print(f"Aggregated Score: {retrieved_doc.metadata['score']}")
+        print(f"Aggregated Score: {retrieved_doc.metadata['max_similarity_score']}")
         print("--- Test Passed ---")
 
 if __name__ == "__main__":

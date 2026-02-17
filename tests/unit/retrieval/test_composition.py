@@ -1,6 +1,7 @@
 import pytest
-from unittest.mock import MagicMock
 from langchain_core.retrievers import BaseRetriever
+from langchain_core.stores import InMemoryStore
+from langchain_core.vectorstores import VectorStore
 # Import classes from the module under test to ensure type matching
 from rag_lib.retrieval.composition import (
     EnsembleRetriever, 
@@ -16,6 +17,22 @@ class MockRetriever(BaseRetriever):
     def _get_relevant_documents(self, query, *, run_manager):
         return []
 
+
+class DummyVectorStore(VectorStore):
+    @classmethod
+    def from_texts(cls, texts, embedding, metadatas=None, **kwargs):
+        return cls()
+
+    def add_texts(self, texts, metadatas=None, **kwargs):
+        return []
+
+    def similarity_search(self, query, k=4, **kwargs):
+        return []
+
+    @property
+    def embeddings(self):
+        return None
+
 def test_ensemble_creation():
     r1 = MockRetriever()
     r2 = MockRetriever()
@@ -26,14 +43,13 @@ def test_ensemble_creation():
     assert ensemble.weights == [0.5, 0.5]
 
 def test_dual_storage_creation():
-    mock_vec = MagicMock()
-    mock_doc = MagicMock()
+    vector_store = DummyVectorStore()
+    doc_store = InMemoryStore()
     
-    dual = create_dual_storage_retriever(mock_vec, mock_doc, id_key="seg_id")
+    dual = create_dual_storage_retriever(vector_store, doc_store, id_key="seg_id")
     assert isinstance(dual, MultiVectorRetriever)
-    # Check internal assignment (private attrs, but necessary for unit test verification)
-    assert dual.vectorstore == mock_vec
-    assert dual.byte_store == mock_doc
+    assert dual.vectorstore == vector_store
+    assert dual.docstore == doc_store
     assert dual.id_key == "seg_id"
 
 # Robustly import BaseCrossEncoder for mocking
