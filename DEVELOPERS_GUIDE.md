@@ -84,7 +84,7 @@ Responsible for ingesting raw files and producing standard **LangChain Documents
 | Class                      | Import Path                    | Description                                                                                                  |
 | :------------------------- | :----------------------------- | :----------------------------------------------------------------------------------------------------------- |
 | **`PDFLoader`**            | `rag_lib.loaders.pdf`          | Uses **Camelot** (lattice/stream) or **Poppler** to extract text and high-fidelity tables from PDFs.         |
-| **`StructuredLoader`**     | `rag_lib.loaders.structured`   | Parses **DOCX** files into a single **Markdown** document, preserving hierarchy.                             |
+| **`DocXLoader`**           | `rag_lib.loaders.docx`         | Parses **DOCX** files into a single **Markdown** document, preserving headings/lists/links/tables.          |
 | **`CSVLoader`**            | `rag_lib.loaders.csv_excel`    | Loads **CSV** files. Detects delimiters automatically and converts rows to Markdown tables.                  |
 | **`ExcelLoader`**          | `rag_lib.loaders.csv_excel`    | Loads **Excel** files, treating each sheet as a segment.                                                     |
 | **`RegexHierarchyLoader`** | `rag_lib.loaders.regex`        | Splits plain text files using a recursive list of regex patterns (e.g., Log files, Configs).                 |
@@ -205,7 +205,7 @@ idx.index(text_segments, batch_size=50)
 ### 6.3. Hierarchical DOCX Parsing
 
 ```python
-from rag_lib.loaders.structured import StructuredLoader
+from rag_lib.loaders.docx import DocXLoader
 from rag_lib.chunkers.markdown_hierarchy import MarkdownHierarchySplitter
 
 # Define Regex Patterns for custom sections (optional)
@@ -213,7 +213,7 @@ patterns = [
     {"level": 2, "pattern": r"^Article \d+"}, # Treat "Article X" as Level 2 functionality
 ]
 
-loader = StructuredLoader("contract.docx") # Regex patterns now applied in Splitter if using RegexHierarchySplitter
+loader = DocXLoader("contract.docx") # Regex patterns now applied in Splitter if using RegexHierarchySplitter
 docs = loader.load()
 
 # Split by Hierarchy
@@ -280,33 +280,190 @@ To add a new Chunker:
 
 ### 9.3. Retrieval
 
-**`GraphRetriever`** supports two modes:
+`GraphRetriever` is strict and deterministic in this codebase (no silent fallbacks for missing capabilities).
 
-1.  **Local Mode** (`mode="local"`):
-    - Implementation: Searches for specific entities (keywords) and traverses 1-hop or 2-hop neighbors.
-    - Use Case: Specific questions about an entity (e.g., "Who follows user X?").
+**Constructor (current API):**
 
-2.  **Global Mode** (`mode="global"`):
-    - Implementation: Retrieves **Community Summaries** from the Vector Store.
-    - Use Case: High-level thematic questions (e.g., "What are the main topics discussed?").
+```python
+GraphRetriever(
+    vector_store,
+    graph_store,
+    config: GraphQueryConfig,
+    embedder: Optional[Embeddings] = None,
+    llm: Optional[BaseChatModel] = None,
+    doc_store: Optional[BaseStore[str, Document]] = None,
+    id_key: str = "segment_id",
+)
+```
+
+#### 9.3.1. `GraphRetriever` Parameters
+
+| Parameter      | Type                                 | Required | Default       | Description |
+| :------------- | :----------------------------------- | :------- | :------------ | :---------- |
+| `vector_store` | `VectorStore`                        | Yes      | -             | Primary vector backend. Required in strict mode for scoring + hydration (`similarity_search_with_relevance_scores`, `get_by_ids`, async equivalents). |
+| `graph_store`  | `BaseGraphStore`                     | Yes      | -             | Graph backend with node/edge search, expansion, priors, and provenance methods. |
+| `config`       | `GraphQueryConfig`                   | Yes      | -             | Retrieval strategy configuration (mode, thresholds, budgets, limits). |
+| `embedder`     | `Embeddings \| None`                 | No       | `None`        | Optional embedding model passed to graph hybrid search methods. |
+| `llm`          | `BaseChatModel \| None`              | No       | `None`        | Required when `enable_keyword_extraction=True`. Must support `with_structured_output(...)`. |
+| `doc_store`    | `BaseStore[str, Document] \| None`   | No       | `None`        | Optional authoritative source for hydrated chunks (`mget`/`amget`). If absent, hydration uses `vector_store.get_by_ids`/`aget_by_ids`. |
+| `id_key`       | `str`                                | No       | `"segment_id"` | Metadata key used as source id for hydration and provenance matching. |
+
+#### 9.3.2. `GraphQueryConfig` Parameters
+
+| Field | Type | Default | Description |
+| :---- | :--- | :------ | :---------- |
+| `mode` | `Literal["local", "global", "hybrid", "mix"]` | `"hybrid"` | Retrieval strategy mode. |
+| `top_k_entities` | `int` | `12` | Max entity candidates used in scoring/assembly. |
+| `top_k_relations` | `int` | `24` | Max relation/community candidates. |
+| `top_k_chunks` | `int` | `10` | Max hydrated chunk candidates before final budgeting. |
+| `max_hops` | `int` | `2` | Graph expansion depth from seeds (local/hybrid/mix). |
+| `min_score` | `float` | `0.15` | Final score floor after rerank. Lower values increase recall/noise. |
+| `use_rerank` | `bool` | `True` | Applies deterministic overlap rerank pass on final evidence. |
+| `enable_keyword_extraction` | `bool` | `True` | If `True`, query keywords are extracted via `llm.with_structured_output(...)`. If `False`, deterministic lexical keywords are used. |
+| `token_budget_total` | `int` | `3500` | Total evidence token budget for final assembly. |
+| `token_budget_entities` | `int` | `700` | Token budget cap for entity evidence. |
+| `token_budget_relations` | `int` | `900` | Token budget cap for relation evidence. |
+| `token_budget_chunks` | `int` | `1900` | Token budget cap for chunk evidence. |
+
+#### 9.3.3. Retrieval Modes
+
+| Mode | Behavior | Best For |
+| :--- | :------- | :------- |
+| `local` | Entity-first seeding, bounded subgraph expansion, relation/entity scoring, chunk hydration from provenance ids. | Precise entity-centric questions. |
+| `global` | Community + relation-first retrieval, then entity backfill, then hydration. | Thematic/high-level questions. |
+| `hybrid` | Runs `local` + `global` in parallel, merges by Reciprocal Rank Fusion (RRF). | Balanced precision/recall (recommended default). |
+| `mix` | `hybrid` + plain vector chunk retrieval, merged by RRF. | Maximum recall when graph coverage is incomplete. |
+
+#### 9.3.4. Returned Document Metadata Contract
+
+Each returned `Document` includes:
+
+| Metadata Key | Description |
+| :----------- | :---------- |
+| `retrieval_kind` | One of: `chunk`, `entity`, `relation`, `community`. |
+| `score` | Final normalized score (`0.0` to `1.0`). |
+| `graph_mode` | Active mode: `local`, `global`, `hybrid`, `mix`. |
+| `source_segment_id` | Provenance source id when available. |
+| `entity_id` | Present when `retrieval_kind == "entity"`. |
+| `edge_id` | Present when `retrieval_kind == "relation"`. |
+| `community_id` | Present when `retrieval_kind == "community"`. |
+
+#### 9.3.5. Strict Failure Semantics
+
+`GraphRetriever` raises explicit exceptions instead of returning empty fallbacks for core capability failures:
+
+- `GraphConfigurationError`: invalid config or missing required components.
+- `GraphCapabilityError`: selected backend lacks required method.
+- `GraphDataError`: backend returns invalid/unsupported payload shape.
 
 ### 9.4. Example Usage
 
 ```python
+from langchain_openai import ChatOpenAI
+from rag_lib.embeddings.factory import get_embeddings_model
 from rag_lib.graph.store import NetworkXGraphStore
 from rag_lib.processors.entity_extractor import EntityExtractor
-from rag_lib.retrieval.graph_retriever import GraphRetriever
+from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
+from rag_lib.vectors.factory import get_vector_store
 
 # 1. Setup
 store = NetworkXGraphStore()
 extractor = EntityExtractor(llm=my_llm, store=store)
+embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+vector_store = get_vector_store(
+    provider="chroma",
+    embeddings=embeddings,
+    collection_name="graph_demo",
+    cleanup=True,
+)
 
 # 2. Extract Graph
 await extractor.aprocess_segments(segments)
 
-# 3. Retrieve
-retriever = GraphRetriever(store=store, mode="local")
-docs = await retriever.ainvoke("Key Concept")
+# 3. Index source chunks for hydration
+vector_store.add_texts(
+    texts=[s.content for s in segments],
+    metadatas=[{"segment_id": s.segment_id} for s in segments],
+    ids=[s.segment_id for s in segments],
+)
+
+# 4. Retrieve (deterministic lexical keywords)
+retriever = GraphRetriever(
+    vector_store=vector_store,
+    graph_store=store,
+    config=GraphQueryConfig(
+        mode="hybrid",
+        max_hops=1,
+        top_k_entities=8,
+        top_k_relations=10,
+        top_k_chunks=8,
+        min_score=0.45,
+        enable_keyword_extraction=False,
+    ),
+)
+docs = retriever.invoke("Теория вероятности")
+```
+
+#### 9.4.1. Strict LLM Keyword Extraction Example
+
+```python
+llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
+
+retriever = GraphRetriever(
+    vector_store=vector_store,
+    graph_store=store,
+    llm=llm,
+    config=GraphQueryConfig(
+        mode="mix",
+        enable_keyword_extraction=True,  # uses llm.with_structured_output(...)
+    ),
+)
+
+docs = retriever.invoke("Теория вероятности")
+```
+
+#### 9.4.2. Mode Preset Examples
+
+```python
+# Local (high precision, lower noise)
+GraphQueryConfig(
+    mode="local",
+    max_hops=1,
+    top_k_entities=6,
+    top_k_relations=8,
+    top_k_chunks=6,
+    min_score=0.55,
+)
+
+# Global (relation/community-heavy)
+GraphQueryConfig(
+    mode="global",
+    max_hops=1,
+    top_k_entities=8,
+    top_k_relations=12,
+    top_k_chunks=6,
+    min_score=0.45,
+)
+
+# Hybrid (balanced default)
+GraphQueryConfig(
+    mode="hybrid",
+    max_hops=1,
+    top_k_entities=8,
+    top_k_relations=10,
+    top_k_chunks=7,
+    min_score=0.50,
+)
+
+# Mix (max recall)
+GraphQueryConfig(
+    mode="mix",
+    max_hops=1,
+    top_k_entities=6,
+    top_k_relations=10,
+    top_k_chunks=8,
+    min_score=0.50,
+)
 ```
 
 ---

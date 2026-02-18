@@ -1,79 +1,60 @@
-import pytest
-from unittest.mock import MagicMock, patch
-from rag_lib.loaders.structured import StructuredLoader
+from __future__ import annotations
 
-# Helper to create mock docx XML
-def create_docx_xml(paragraphs):
-    # paragraphs is list of (style, text)
-    # style "Heading1", "Heading2", or None
-    xml = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
-    for style, text in paragraphs:
-        xml += '<w:p>'
-        if style:
-            xml += f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>'
-        xml += f'<w:r><w:t>{text}</w:t></w:r></w:p>'
-    xml += '</w:body></w:document>'
-    return xml.encode('utf-8')
+import re
+from pathlib import Path
 
-@pytest.fixture
-def mock_docx_loader():
-    with patch('zipfile.ZipFile') as mock_zip:
-        yield mock_zip
+from rag_lib.loaders.docx import DocXLoader
+from _docx_test_utils import write_docx
 
-# S-01: Mix Strategy (Regex inside Structure)
-def test_mix_strategy(mock_docx_loader):
-    # Setup Mock XML: H1 followed by text containing "Rule 1", "Rule 2"
-    xml_content = create_docx_xml([
-        ("Heading1", "Chapter 1"),
-        (None, "Intro text."),
-        (None, "Rule 1: Do X."),
-        (None, "Rule 2: Do Y.")
-    ])
-    
-    # Configure mock
-    mock_zip_instance = mock_docx_loader.return_value.__enter__.return_value
-    mock_zip_instance.read.return_value = xml_content
-    
-    # Loader with Regex pattern for "Rule \d"
-    loader = StructuredLoader("dummy.docx", regex_patterns=[(2, r"Rule \d+")])
-    segments = loader.load()
-    
-    # Expect: 
-    # Seg 1: "Chapter 1\nIntro text." (Level 1)
-    # Seg 2: "Rule 1: Do X." (Level 2? Or child of Ch1?)
-    # Seg 3: "Rule 2: Do Y."
-    
-    # Logic: Regex splits the content of the structural segment.
-    # Implementation should handle this recursion.
-    
-    print(f"\nDebug Structure: {len(segments)} segments")
-    for i, seg in enumerate(segments):
-        print(f"Seg {i}: L{seg.level} Content='{seg.content}' Path={seg.path}")
 
-    assert len(segments) >= 3
-    assert segments[0].content.strip() == "Chapter 1\nIntro text."
-    assert segments[1].content.strip() == "Rule 1: Do X."
-    assert segments[1].path == ["Chapter 1"] # Inherits parent path?
+def test_docx_loader_mix_headings_and_body(tmp_path: Path) -> None:
+    document_xml = """
+    <w:document
+      xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <w:body>
+        <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter 1</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Intro text.</w:t></w:r></w:p>
+        <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.2 Rule</w:t></w:r></w:p>
+      </w:body>
+    </w:document>
+    """
 
-# S-02: XML Hierarchy
-def test_xml_hierarchy(mock_docx_loader):
-    xml_content = create_docx_xml([
-        ("Heading1", "Title"),
-        (None, "Body"),
-        ("Heading2", "Subtitle"),
-        (None, "SubBody")
-    ])
-     
-    mock_zip_instance = mock_docx_loader.return_value.__enter__.return_value
-    mock_zip_instance.read.return_value = xml_content
-    
-    loader = StructuredLoader("dummy.docx")
-    segments = loader.load()
-    
-    assert len(segments) == 2
-    assert segments[0].content.strip() == "Title\nBody"
-    assert segments[0].level == 1
-    
-    assert segments[1].content.strip() == "Subtitle\nSubBody"
-    assert segments[1].path == ["Title"]
-    assert segments[1].level == 2
+    docx_path = write_docx(tmp_path, document_xml=document_xml)
+    docs = DocXLoader(str(docx_path)).load()
+
+    assert len(docs) == 1
+    markdown = docs[0].page_content
+    assert "# Chapter 1" in markdown
+    assert "Intro text." in markdown
+    assert re.search(r"^###\s+1\.2 Rule$", markdown, flags=re.MULTILINE)
+
+
+def test_docx_loader_ordered_list_counter(tmp_path: Path) -> None:
+    numbering_xml = """
+    <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:abstractNum w:abstractNumId="1">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="11"><w:abstractNumId w:val="1"/></w:num>
+    </w:numbering>
+    """
+
+    document_xml = """
+    <w:document
+      xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <w:body>
+        <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="11"/></w:numPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>
+        <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="11"/></w:numPr></w:pPr><w:r><w:t>Second</w:t></w:r></w:p>
+      </w:body>
+    </w:document>
+    """
+
+    docx_path = write_docx(tmp_path, document_xml=document_xml, numbering_xml=numbering_xml)
+    docs = DocXLoader(str(docx_path)).load()
+
+    assert len(docs) == 1
+    markdown = docs[0].page_content
+    assert re.search(r"^1\.\s+First$", markdown, flags=re.MULTILINE)
+    assert re.search(r"^2\.\s+Second$", markdown, flags=re.MULTILINE)

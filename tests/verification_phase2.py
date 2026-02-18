@@ -9,7 +9,7 @@ import pandas as pd
 from rag_lib.core.domain import Document, Segment, SegmentType
 from rag_lib.loaders.csv_excel import CSVLoader, ExcelLoader
 from rag_lib.loaders.pdf import PDFLoader
-from rag_lib.loaders.structured import StructuredLoader
+from rag_lib.loaders.docx import DocXLoader
 from rag_lib.loaders.regex import RegexHierarchyLoader
 from rag_lib.loaders.miner_u import MinerULoader
 
@@ -111,7 +111,7 @@ class TestPhase2(unittest.TestCase):
         self.assertIn("Page text", docs[0].page_content)
         print("PDFLoader (Text) PASSED")
 
-    # Skipping complicated mocks for Excel/Structured/MinerU to save time, 
+    # Skipping complicated mocks for Excel/DocX/MinerU to save time,
     # assuming they follow similar patterns or will be tested in E2E.
     
 if __name__ == '__main__':

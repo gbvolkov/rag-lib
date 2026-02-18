@@ -1,39 +1,28 @@
-import sys
+﻿import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from example_utils import setup_environment, print_section, save_json_results
+from example_utils import print_section, save_json_results, setup_environment
 
-from rag_lib.loaders.structured import StructuredLoader
 from rag_lib.chunkers.regex_hierarchy import RegexHierarchySplitter
-from rag_lib.core.domain import Document, Segment
-from rag_lib.processors.entity_extractor import EntityExtractor
+from rag_lib.embeddings.factory import get_embeddings_model
 from rag_lib.graph.store import NetworkXGraphStore
-from rag_lib.retrieval.graph_retriever import GraphRetriever
+from rag_lib.loaders.docx import DocXLoader
 from rag_lib.llm.factory import get_llm
+from rag_lib.processors.entity_extractor import EntityExtractor
+from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
+from rag_lib.vectors.factory import get_vector_store
 
 """
 E2E Example 05: DOCX Graph Workflow
 
 Features Tested:
-1. StructuredLoader: Loading DOCX into markdown-like structure.
+1. DocXLoader: Loading DOCX into markdown.
 2. RegexHierarchySplitter: Converting loaded Document -> hierarchical Segments.
 3. EntityExtractor: Building a graph (entities + relations) from Segments.
-4. GraphRetriever: Local graph-based retrieval over extracted nodes/edges.
-
-Expected Results:
-- Loading:
-    - Input: docs/<docx file>
-    - Output: List[Document]
-- Segmentation:
-    - Input: loaded markdown text
-    - Output: List[Segment] with hierarchy metadata
-- Extraction:
-    - Output: Populated NetworkXGraphStore
-- Retrieval:
-    - Query: a concept from the DOCX (e.g. "zadacha")
-    - Output: Entity context documents from graph traversal
+4. GraphRetriever: LightRAG-style graph retrieval (local/global/hybrid/mix).
 """
 
 
@@ -70,7 +59,7 @@ def _build_graph_snapshot(graph_store: NetworkXGraphStore) -> Dict[str, Any]:
     }
 
 
-def main():
+def main() -> None:
     setup_environment()
     print_section("05. DOCX Graph Workflow")
 
@@ -81,8 +70,8 @@ def main():
         return
 
     print_section("1. Loading DOCX")
-    print(f"Loading {docx_path} using StructuredLoader...")
-    loader = StructuredLoader(str(docx_path))
+    print(f"Loading {docx_path} using DocXLoader...")
+    loader = DocXLoader(str(docx_path))
     docs = loader.load()
 
     if not docs:
@@ -121,9 +110,15 @@ def main():
     llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
     extractor = EntityExtractor(llm=llm, store=graph_store)
 
-    max_graph_segments = min(10, len(segments))
-    print(f"Extracting entities/relations from first {max_graph_segments} segments...")
-    extractor.process_segments(segments[:max_graph_segments])
+    max_graph_segments = 10
+    sample_start = 25
+    sample_segments = segments[sample_start : sample_start + max_graph_segments]
+    print(
+        f"Extracting entities/relations from segments [{sample_start}:{sample_start + max_graph_segments}] "
+        f"({len(sample_segments)} selected of {len(segments)})..."
+    )
+    extractor.process_segments(sample_segments)
+    save_json_results(sample_segments, "05_docx_graph", "sample_segments")
 
     num_nodes = graph_store.graph.number_of_nodes()
     num_edges = graph_store.graph.number_of_edges()
@@ -140,24 +135,120 @@ def main():
         print("No graph nodes extracted; retrieval will likely return no results.")
 
     print_section("4. Graph Retrieval")
-    retriever = GraphRetriever(store=graph_store, mode="local", search_depth=1)
-    query = "задача"
-    print(f"Query: {query}")
-    results = retriever.invoke(query)
-    save_json_results(results, "05_docx_graph", "retrieved_results")
+    vector_texts = []
+    vector_metadatas = []
+    vector_ids = []
+    for seg in sample_segments:
+        if not seg.segment_id or not seg.content.strip():
+            continue
+        vector_texts.append(seg.content)
+        vector_metadatas.append({"segment_id": seg.segment_id})
+        vector_ids.append(seg.segment_id)
 
-    if not results:
-        print("No graph retrieval results.")
+    if not vector_ids:
+        print("No valid segments for vector indexing. Exiting.")
         return
 
-    print(f"Top {min(10, len(results))} graph retrieval results:")
-    for i, res in enumerate(results[:10], start=1):
-        metadata = res.metadata or {}
-        print(f"[{i}] {res.page_content[:180]}...")
-        print(
-            f"    source={metadata.get('source', 'graph')} "
-            f"node_id={metadata.get('node_id', 'n/a')}"
+    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    collection_name = f"docx_graph_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    vector_store = get_vector_store(
+        provider="chroma",
+        embeddings=embeddings,
+        collection_name=collection_name,
+        cleanup=True,
+    )
+    vector_store.add_texts(texts=vector_texts, metadatas=vector_metadatas, ids=vector_ids)
+    print(f"Indexed {len(vector_ids)} segments into Chroma collection '{collection_name}'.")
+
+    modes = ["local", "mix", "global", "hybrid"]
+    
+    for mode in modes:
+        print_section(f"5. Graph Retrieval (Mode: {mode})")
+        if mode == "local":
+            # Local: strict and precise around nearest entity neighborhood.
+            graph_config = GraphQueryConfig(
+                mode="local",
+                max_hops=1,
+                top_k_entities=6,
+                top_k_relations=8,
+                top_k_chunks=6,
+                min_score=0.55,
+                token_budget_entities=450,
+                token_budget_relations=650,
+                token_budget_chunks=2400,
+                enable_keyword_extraction=True,
+            )
+        elif mode == "mix":
+            # Mix: strongest chunk recall, but keep graph evidence filtered.
+            graph_config = GraphQueryConfig(
+                mode="mix",
+                max_hops=1,
+                top_k_entities=6,
+                top_k_relations=10,
+                top_k_chunks=8,
+                min_score=0.50,
+                token_budget_entities=450,
+                token_budget_relations=700,
+                token_budget_chunks=2350,
+                enable_keyword_extraction=True,
+            )
+        elif mode == "global":
+            # Global: relation/community-centric view with moderate filtering.
+            graph_config = GraphQueryConfig(
+                mode="global",
+                max_hops=1,
+                top_k_entities=8,
+                top_k_relations=12,
+                top_k_chunks=6,
+                min_score=0.45,
+                token_budget_entities=600,
+                token_budget_relations=1200,
+                token_budget_chunks=1700,
+                enable_keyword_extraction=True,
+            )
+        else:
+            # Hybrid: balanced graph coverage + chunk evidence.
+            graph_config = GraphQueryConfig(
+                mode="hybrid",
+                max_hops=1,
+                top_k_entities=8,
+                top_k_relations=10,
+                top_k_chunks=7,
+                min_score=0.50,
+                token_budget_entities=550,
+                token_budget_relations=900,
+                token_budget_chunks=2000,
+                enable_keyword_extraction=True,
+            )
+
+        retriever = GraphRetriever(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            config=graph_config,
+            llm=llm,
         )
+
+        queries = ["Теория вероятности", "вероятность"]
+        for query in queries:
+            print(f"Query: {query}")
+            results = retriever.invoke(query)
+            save_json_results(results, "05_docx_graph", f"retrieved_results_mode_{mode}_q_{query}")
+
+            if not results:
+                print(f"No graph retrieval results for {query}.")
+                continue
+
+            print(f"Top {min(10, len(results))} graph retrieval results for {query}:")
+            for i, res in enumerate(results[:10], start=1):
+                metadata = res.metadata or {}
+                print(f"[{i}] {res.page_content[:180]}...")
+                print(
+                    f"    kind={metadata.get('retrieval_kind', 'n/a')} "
+                    f"score={metadata.get('score', 0):.3f} "
+                    f"entity_id={metadata.get('entity_id', 'n/a')} "
+                    f"edge_id={metadata.get('edge_id', 'n/a')} "
+                    f"source_segment_id={metadata.get('source_segment_id', 'n/a')}"
+                )
 
 
 if __name__ == "__main__":

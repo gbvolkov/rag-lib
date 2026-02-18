@@ -2,7 +2,7 @@ from .core.domain import Segment
 from .core.indexer import Indexer
 from .loaders.pdf import PDFLoader
 from .loaders.pymupdf import PyMuPDFLoader
-from .loaders.structured import StructuredLoader
+from .loaders.docx import DocXLoader
 from .chunkers.semantic import SemanticChunker
 from .processors.enricher import SegmentEnricher
 
@@ -11,7 +11,7 @@ __all__ = [
     "Indexer",
     "PDFLoader",
     "PyMuPDFLoader",
-    "StructuredLoader",
+    "DocXLoader",
     "SemanticChunker",
     "SegmentEnricher",
 ]

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch, mock_open
 import xml.etree.ElementTree as ET
 from rag_lib.chunkers.semantic import SemanticChunker
 from rag_lib.chunkers.markdown_table import MarkdownTableSplitter
-from rag_lib.loaders.structured import StructuredLoader
+from rag_lib.loaders.docx import DocXLoader
 from rag_lib.core.domain import Segment, SegmentType
 
 # --- Semantic Chunker Tests ---
@@ -31,12 +31,12 @@ def test_semantic_chunker_basic_logic():
     # We need to patch sent_tokenize because it might split differently or need download
     with patch("rag_lib.chunkers.semantic.sent_tokenize") as mock_sent:
         mock_sent.return_value = ["Sentence A.", "Sentence B.", "Sentence C."]
-        
+    
         segments = chunker.split_text(text)
         
     assert len(segments) == 2
-    assert "Sentence A. Sentence B." in segments[0].content
-    assert "Sentence C." in segments[1].content
+    assert "Sentence A. Sentence B." in segments[0]
+    assert "Sentence C." in segments[1]
 
 def test_semantic_chunker_empty_input():
     mock_embeddings = MagicMock()
@@ -58,7 +58,7 @@ def test_markdown_splitter_mixed_content():
     Postamble text.
     """
     splitter = MarkdownTableSplitter()
-    segments = splitter.split_text(text)
+    segments = splitter.create_segments(text)
     
     # Should get 3 segments: Text, Table, Text
     # Regex might correspond to 3 matches? No, 3 segments.
@@ -77,15 +77,15 @@ def test_markdown_splitter_mixed_content():
 def test_markdown_splitter_no_table():
     text = "Just some text."
     splitter = MarkdownTableSplitter()
-    segments = splitter.split_text(text)
+    segments = splitter.create_segments(text)
     
     assert len(segments) == 1
     assert segments[0].type == SegmentType.TEXT
     assert segments[0].content == "Just some text."
 
-# --- Structured Loader (DOCX) Tests ---
+# --- DocX Loader Tests ---
 
-def test_structured_loader_docx_parsing():
+def test_docx_loader_docx_parsing():
     # Mock zipfile to return XML
     xml_content = b"""
     <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -108,22 +108,22 @@ def test_structured_loader_docx_parsing():
         mock_zip_instance.read.return_value = xml_content
         mock_zip.return_value.__enter__.return_value = mock_zip_instance
         
-        loader = StructuredLoader("dummy.docx")
-        segments = loader.load()
+        loader = DocXLoader("dummy.docx")
+        docs = loader.load()
         
-    assert len(segments) == 1 # Heading 1 starts a segment that likely contains Body text.
-    # Logic: Heading 1 found -> New segment. Body text -> appended to current segment.
-    
-    seg = segments[0]
-    assert "Chapter 1" in seg.metadata["title"]
-    assert "Body text." in seg.content
-    assert seg.level == 1
+    assert len(docs) == 1
+    markdown = docs[0].page_content
+    assert "# Chapter 1" in markdown
+    assert "Body text." in markdown
+    assert docs[0].metadata["source_type"] == "docx"
+    assert docs[0].metadata["output_format"] == "markdown"
 
-def test_structured_loader_bad_zip():
+def test_docx_loader_bad_zip_returns_empty():
     import zipfile
     with patch("zipfile.ZipFile") as mock_zip:
         mock_zip.side_effect = zipfile.BadZipFile("Not a valid zip")
         
-        loader = StructuredLoader("bad.docx")
-        with pytest.raises(zipfile.BadZipFile):
-            loader.load()
+        loader = DocXLoader("bad.docx")
+        docs = loader.load()
+
+    assert docs == []

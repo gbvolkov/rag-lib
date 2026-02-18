@@ -5,6 +5,9 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore
+from langchain_core.embeddings import Embeddings
+from langchain_core.language_models import BaseChatModel
+from langchain_core.stores import BaseStore
 from langchain_community.retrievers import BM25Retriever
 from rapidfuzz import process, fuzz
 
@@ -137,14 +140,27 @@ def get_bm25_retriever(
     return BM25Retriever.from_documents(lc_docs, k=k)
 
 def get_graph_retriever(
-    graph_store: Any, # BaseGraphStore
-    search_depth: int = 1
+    vector_store: Optional[VectorStore],
+    graph_store: Any,  # BaseGraphStore
+    config: Optional[Any] = None,  # GraphQueryConfig
+    embedder: Optional[Embeddings] = None,
+    llm: Optional[BaseChatModel] = None,
+    doc_store: Optional[BaseStore[str, Document]] = None,
+    id_key: str = "segment_id",
 ) -> BaseRetriever:
     """
     Factory for Graph Retriever.
     """
     # Import locally to avoid circular imports or heavy deps if not used
-    from rag_lib.retrieval.graph_retriever import GraphRetriever
+    from rag_lib.retrieval.graph_retriever import GraphRetriever, GraphQueryConfig
     
-    return GraphRetriever(store=graph_store, search_depth=search_depth)
+    return GraphRetriever(
+        vector_store=vector_store,
+        graph_store=graph_store,
+        config=config or GraphQueryConfig(),
+        embedder=embedder,
+        llm=llm,
+        doc_store=doc_store,
+        id_key=id_key,
+    )
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 import zipfile
@@ -510,17 +510,18 @@ class DocXLoader:
             return None
 
         heading_level = self._resolve_heading_level(props, para_style)
+        heading_text = self._strip_inline_markup(text)
 
         if num_id:
             item = self._format_list_item(text.strip(), num_id, ilvl, context)
             return _Block(text=item, kind="list", list_key=num_id)
 
         if heading_level is None:
-            heading_level = self._infer_heading_level(text, stats)
+            heading_level = self._infer_heading_level(heading_text, stats)
 
         if heading_level is not None:
             heading_level = max(1, min(6, heading_level))
-            return _Block(text=f"{'#' * heading_level} {text.strip()}", kind="heading")
+            return _Block(text=f"{'#' * heading_level} {heading_text.strip()}", kind="heading")
 
         return _Block(text=text.strip(), kind="paragraph")
 
@@ -563,7 +564,7 @@ class DocXLoader:
         if bold_ratio < 0.75:
             return None
 
-        numbered_match = re.match(r"^(\d+(?:\.\d+)*)[\.)]\s+\S+", normalized)
+        numbered_match = re.match(r"^(\d+(?:\.\d+)*)(?:[\.)])?\s+\S+", normalized)
         if numbered_match:
             depth = numbered_match.group(1).count(".") + 1
             return min(6, max(2, depth + 1))
@@ -934,8 +935,6 @@ class DocXLoader:
         escaped = escaped.replace("\\", "\\\\")
         escaped = escaped.replace("*", "\\*")
         escaped = escaped.replace("_", "\\_")
-        escaped = escaped.replace("[", "\\[")
-        escaped = escaped.replace("]", "\\]")
         escaped = escaped.replace("`", "\\`")
         if in_table:
             escaped = escaped.replace("|", "\\|")
@@ -948,6 +947,12 @@ class DocXLoader:
             .replace("\xa0", " ")
             .replace("\u202f", " ")
         )
+
+    def _strip_inline_markup(self, text: str) -> str:
+        unlinked = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        ununderlined = re.sub(r"</?u>", "", unlinked)
+        unformatted = ununderlined.replace("***", "").replace("**", "").replace("*", "").replace("~~", "")
+        return unformatted.replace("\\", "")
 
 
 def _read_on_off(elem: Optional[ET.Element]) -> Optional[bool]:

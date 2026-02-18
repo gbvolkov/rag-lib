@@ -1,9 +1,63 @@
 import pytest
 import pytest_asyncio
+from langchain_core.vectorstores import VectorStore
 from rag_lib.graph.store import NetworkXGraphStore
 from rag_lib.graph.domain import GraphNode, GraphEdge
-from rag_lib.retrieval.graph_retriever import GraphRetriever
+from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
 from langchain_core.documents import Document
+
+
+class AsyncStrictVectorStore(VectorStore):
+    def __init__(self, docs=None):
+        self.docs = docs or []
+
+    @classmethod
+    def from_texts(cls, texts, embedding, metadatas=None, **kwargs):
+        metadatas = metadatas or [{} for _ in texts]
+        ids = kwargs.get("ids", [None for _ in texts])
+        docs = []
+        for idx, text in enumerate(texts):
+            metadata = dict(metadatas[idx] if idx < len(metadatas) else {})
+            if idx < len(ids) and ids[idx] is not None:
+                metadata["segment_id"] = ids[idx]
+            docs.append(Document(page_content=text, metadata=metadata))
+        return cls(docs=docs)
+
+    def add_texts(self, texts, metadatas=None, ids=None, **kwargs):
+        metadatas = metadatas or [{} for _ in texts]
+        ids = ids or [None for _ in texts]
+        for idx, text in enumerate(texts):
+            metadata = dict(metadatas[idx] if idx < len(metadatas) else {})
+            if idx < len(ids) and ids[idx] is not None:
+                metadata["segment_id"] = ids[idx]
+            self.docs.append(Document(page_content=text, metadata=metadata))
+        return ids
+
+    def similarity_search(self, query, k=4, **kwargs):
+        return [doc for doc, _ in self.similarity_search_with_relevance_scores(query, k=k, **kwargs)]
+
+    def similarity_search_with_relevance_scores(self, query, k=4, filter=None, **kwargs):
+        docs = self.docs
+        if filter:
+            docs = [
+                doc for doc in docs
+                if all((doc.metadata or {}).get(key) == value for key, value in filter.items())
+            ]
+        return [(doc, 1.0) for doc in docs[:k]]
+
+    async def asimilarity_search_with_relevance_scores(self, query, k=4, filter=None, **kwargs):
+        return self.similarity_search_with_relevance_scores(query, k=k, filter=filter, **kwargs)
+
+    def get_by_ids(self, ids):
+        wanted = set(ids)
+        return [doc for doc in self.docs if (doc.metadata or {}).get("segment_id") in wanted]
+
+    async def aget_by_ids(self, ids):
+        return self.get_by_ids(ids)
+
+    @property
+    def embeddings(self):
+        return None
 
 @pytest.mark.asyncio
 async def test_async_networkx_store_operations():
@@ -30,44 +84,48 @@ async def test_async_networkx_store_operations():
 @pytest.mark.asyncio
 async def test_async_graph_retriever_local():
     store = NetworkXGraphStore()
-    node = GraphNode(id="apple", label="Apple", type="Fruit", description="A red fruit")
+    node = GraphNode(id="apple", label="Apple", type="Fruit", description="A red fruit", source_segment_id="seg_apple")
     await store.aadd_node(node)
+    vector_store = AsyncStrictVectorStore(
+        docs=[Document(page_content="Apple is a red fruit", metadata={"segment_id": "seg_apple"})]
+    )
     
-    retriever = GraphRetriever(store=store, mode="local")
+    retriever = GraphRetriever(
+        vector_store=vector_store,
+        graph_store=store,
+        config=GraphQueryConfig(mode="local", max_hops=1, enable_keyword_extraction=False),
+    )
     
     # Test ainvoke which triggers _aget_relevant_documents
     results = await retriever.ainvoke("apple")
     
     assert len(results) >= 1
     assert "Apple" in results[0].page_content
-    assert results[0].metadata["source"] == "graph"
+    assert results[0].metadata["retrieval_kind"] in {"entity", "relation", "chunk"}
 
 @pytest.mark.asyncio
 async def test_async_graph_retriever_global():
     store = NetworkXGraphStore()
+    vector_store = AsyncStrictVectorStore(
+        docs=[
+            Document(
+                page_content="Async Summary",
+                metadata={"is_community_summary": True, "segment_id": "seg_summary", "community_id": "c1"},
+            ),
+            Document(page_content="Hydrated chunk for summary", metadata={"segment_id": "seg_summary"}),
+        ]
+    )
     
-    # Mock Vector Store with async support
-    from langchain_core.vectorstores import VectorStore
-    class AsyncDummyVectorStore(VectorStore):
-        def add_texts(self, texts, metadatas, **kwargs):
-            pass
-        def similarity_search(self, query, k=4, **kwargs):
-            pass
-        @classmethod
-        def from_texts(cls, texts, embedding, metadatas=None, **kwargs):
-            pass
-            
-        async def asimilarity_search(self, query, k=4, **kwargs):
-            return [Document(page_content="Async Summary", metadata={"is_community_summary": True})]
-
-    vector_store = AsyncDummyVectorStore()
-    
-    retriever = GraphRetriever(store=store, vector_store=vector_store, mode="global")
+    retriever = GraphRetriever(
+        vector_store=vector_store,
+        graph_store=store,
+        config=GraphQueryConfig(mode="global", enable_keyword_extraction=False),
+    )
     
     results = await retriever.ainvoke("global query")
     
-    assert len(results) == 1
-    assert results[0].page_content == "Async Summary"
+    assert len(results) >= 1
+    assert "Async Summary" in results[0].page_content
 
 @pytest.mark.asyncio
 async def test_async_entity_extractor():
