@@ -39,6 +39,7 @@ class PromptSettings(BaseSettings):
         "Table:\n{table_content}\n\n"
         "Summary:"
     )
+    table_summarizer_soft_max_chars: int = 700
 
     model_config = SettingsConfigDict(env_prefix="PROMPT_")
 

@@ -1,10 +1,9 @@
 import pytest
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from rag_lib.chunkers.csv_table import CSVTableSplitter
 from rag_lib.chunkers.semantic import SemanticChunker
-from rag_lib.loaders.csv_excel import CSVLoader
 from rag_lib.summarizers.table_llm import LLMTableSummarizer
-from rag_lib.config import Settings, settings
 
 @pytest.fixture
 def clean_env():
@@ -32,16 +31,16 @@ def test_chunker_default_from_config(clean_env):
     chunker_env = SemanticChunker(embeddings=MagicMock())
     assert chunker_env.threshold == 0.85
 
-def test_csv_loader_default_from_config(clean_env):
+def test_csv_table_splitter_default_from_config(clean_env):
     # Default is 100
-    loader = CSVLoader("dummy.csv")
-    assert loader.chunk_size == 100
+    splitter = CSVTableSplitter()
+    assert splitter.max_rows_per_chunk == 100
     
     # Change env
     os.environ["INGEST_CHUNK_SIZE"] = "500"
     
-    loader_env = CSVLoader("dummy.csv")
-    assert loader_env.chunk_size == 500
+    splitter_env = CSVTableSplitter()
+    assert splitter_env.max_rows_per_chunk == 500
 
 def test_summarizer_prompt_from_config(clean_env):
     llm = MagicMock()

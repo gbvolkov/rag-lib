@@ -16,22 +16,21 @@ EXCEL_DIR = os.path.join(BASE_REGISTRY, "excel")
 def test_csv_standard():
     path = os.path.join(CSV_DIR, "standard.csv")
     loader = CSVLoader(path)
-    segments = loader.load()
+    docs = loader.load()
     
-    assert len(segments) > 0
-    assert segments[0].type == SegmentType.TABLE
-    # Pandas chunking might return 1 chunk for small file
-    assert "Item 0" in segments[0].content
-    assert segments[0].metadata["source"] == path
+    assert len(docs) > 0
+    assert docs[0].metadata["table_format"] == "markdown"
+    assert "Item 0" in docs[0].page_content
+    assert docs[0].metadata["source"] == path
 
 def test_csv_pipes():
     path = os.path.join(CSV_DIR, "pipes.csv")
     loader = CSVLoader(path)
-    segments = loader.load()
+    docs = loader.load()
     
-    assert len(segments) > 0
+    assert len(docs) > 0
     # Verify delimiter was handled (content should look like markdown table)
-    assert "|" in segments[0].content
+    assert "|" in docs[0].page_content
 
 def test_csv_empty():
     path = os.path.join(CSV_DIR, "empty.csv")
@@ -53,9 +52,9 @@ def test_csv_latin1_encoding_handling():
     # Our loader doesn't accept encoding arg yet. 
     # This is a "Known Limitation" check OR a bug discovery.
     try:
-        segments = loader.load()
+        docs = loader.load()
         # If it loads, check content. "Café" might be garbled.
-        content = segments[0].content
+        content = docs[0].page_content
         # In a real comprehensive test, we might ASSERT that it fails to prompt a fix,
         # or assert that it behaves as currently expected (garbled/error).
         # Let's see what happens.

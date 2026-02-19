@@ -1,78 +1,117 @@
 import sys
+from datetime import datetime
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
-from example_utils import setup_environment, print_section
 
-# 1. Imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from example_utils import print_section, save_json_results, setup_environment
+
+from rag_lib.chunkers.csv_table import CSVTableSplitter
+from rag_lib.core.indexer import Indexer
+from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.llm.factory import get_llm
 from rag_lib.loaders.csv_excel import CSVLoader
-from rag_lib.chunkers.markdown_table import MarkdownTableSplitter
-# Assuming TableSummarizer exists in processors or summarizers
+from rag_lib.retrieval.retrievers import get_vector_retriever
 from rag_lib.summarizers.table_llm import LLMTableSummarizer
-
-from langchain_openai import ChatOpenAI
+from rag_lib.vectors.factory import get_vector_store
 
 """
 E2E Example 07: CSV Table & Summary Workflow
 
 Features Tested:
-1. CSVLoader: Loading tabular data.
-2. MarkdownTableSplitter: Preserving table structure during splitting.
-3. LLMTableSummarizer: Generating natural language summaries of tables.
-4. VectorStore: Indexing summaries (or tables).
-
-Expected Results:
-- Loading:
-    - Input: "docs/dummy.csv"
-    - Output: Segments containing Markdown representation of rows.
-    - Sample Data: "| id | name | ... |\n| 1 | item1 | ... |"
-- Chunking:
-    - Logic: MarkdownTableSplitter (respects headers/rows).
-    - Output: Chunks of valid markdown tables.
-- Summarization:
-    - Input: Table Chunk.
-    - Logic: LLM "Summarize this table".
-    - Output: String summary.
-    - Sample Data: "This table lists inventory items including item1..."
+1. CSVLoader: Loading CSV as normalized table text.
+2. CSVTableSplitter: Row-based chunking with header retention per chunk.
+3. Splitter-level summaries: table-level + chunk-level metadata summaries.
+4. Optional summary injection into page_content for indexing/search.
+5. Indexer + VectorStore: Indexing chunked table segments.
+6. Vector Retriever: Querying indexed table content.
 """
 
-def main():
+
+def main() -> None:
     setup_environment()
     print_section("07. CSV Table & Summary Workflow")
 
-    # 2. Load
-    csv_path = Path(__file__).parent.parent / "docs" / "dummy.csv"
-    print(f"Loading {csv_path} (reading first 100 lines to simulate chunk)...")
-    
-    # CSVLoader usually reads whole file.
-    loader = CSVLoader(str(csv_path)) 
-    # For demo speed with large file, we might interrupt or use a smaller sample, 
-    # but let's assume loader handles it or we use a limit if available.
-    segments = loader.load() 
-    print(f"Loaded {len(segments)} segments (Markdown Tables).")
+    docs_dir = Path(__file__).parent.parent / "docs"
+    csv_path = docs_dir / "data.csv"
+    if not csv_path.exists():
+        print(f"CSV file not found: {csv_path}")
+        return
 
-    # 3. Chunk (MarkdownTableSplitter)
-    # MarkdownTableSplitter splits by rows/headers, not chunk size usually?
-    splitter = MarkdownTableSplitter()
-    
-    all_chunks = []
-    for seg in segments:
-        all_chunks.extend(splitter.split_text(seg.content))
-        
-    print(f"Split into {len(all_chunks)} table chunks.")
+    print_section("1. Loading CSV")
+    print(f"Loading {csv_path.name} using CSVLoader...")
+    loader = CSVLoader(str(csv_path), output_format="csv")
+    docs = loader.load()
 
-    # 4. Summarize Tables
-    print("Summarizing Tables with LLM...")
-    llm = ChatOpenAI(model="gpt-3.5-turbo")
-    summarizer = LLMTableSummarizer(llm)
-    
-    # Process first 3 for demo
-    for i, chunk in enumerate(all_chunks[:3]):
-        summary = summarizer.summarize(chunk)
-        print(f"[Table {i}] Summary: {summary[:100]}...")
-        # In a real app, we'd attach this summary to metadata and index it.
+    if not docs:
+        print("No documents loaded from CSV. Exiting.")
+        return
 
-    # 5. Index & Retrieve (Standard)
-    # ... standard Indexer flow ...
+    print(f"Loaded {len(docs)} document(s).")
+    print(f"CSV text length: {len(docs[0].page_content)} characters.")
+    print(f"Rows detected: {docs[0].metadata.get('row_count', 'n/a')}")
+    print(f"Detected delimiter: {docs[0].metadata.get('delimiter', 'n/a')}")
+
+    save_json_results(docs, "07_csv_table_summary", "loaded_documents")
+
+    print_section("2. CSV Table Row Splitting + Summaries")
+    llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
+    summarizer = LLMTableSummarizer(llm=llm)
+    splitter = CSVTableSplitter(
+        max_rows_per_chunk=2,
+        max_chunk_size=500,
+        summarizer=summarizer,
+        summarize_table=True,
+        summarize_chunks=True,
+        inject_summaries_into_content=True,
+    )
+    segments = splitter.split_documents(docs)
+
+    print(f"Generated {len(segments)} table chunk segment(s).")
+    if not segments:
+        print("No table chunks generated after splitting.")
+        return
+
+    sample_meta = segments[0].metadata or {}
+    print(f"Table summary exists: {'table_summary' in sample_meta}")
+    print(f"Chunk summary exists: {'chunk_summary' in sample_meta}")
+    print(f"Injected content prefix: {segments[0].content[:160]}...")
+
+    save_json_results(segments, "07_csv_table_summary", "segments")
+
+    print_section("3. Indexing")
+    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    collection_name = f"07_csv_table_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    vector_store = get_vector_store(
+        provider="chroma",
+        embeddings=embeddings,
+        collection_name=collection_name,
+        cleanup=True,
+    )
+    indexer = Indexer(vector_store=vector_store, embeddings=embeddings)
+
+    print(f"Indexing {len(segments)} table segment(s) into '{collection_name}'...")
+    indexer.index(segments)
+    print("Indexing complete.")
+
+    print_section("4. Retrieval")
+    query = "Продукт уровень 3 ТУРИСТИЧЕСКАЯ"
+    print(f"Query: {query}")
+    retriever = get_vector_retriever(vector_store=vector_store, k=3)
+    results = retriever.invoke(query)
+    save_json_results(results, "07_csv_table_summary", "retrieved_results")
+
+    print(f"Retrieved {len(results)} result(s).")
+    for i, doc in enumerate(results, start=1):
+        print(f"[{i}] {doc.page_content[:180]}...")
+        print(
+            "    "
+            f"segment_id={doc.metadata.get('segment_id', 'n/a')} "
+            f"is_table={doc.metadata.get('is_table', 'n/a')} "
+            f"table_summary={'table_summary' in doc.metadata} "
+            f"chunk_summary={'chunk_summary' in doc.metadata} "
+            f"source={doc.metadata.get('source', 'n/a')}"
+        )
+
 
 if __name__ == "__main__":
     main()

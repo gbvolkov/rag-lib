@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch
-from rag_lib.core.domain import Segment, SegmentType
+from rag_lib.chunkers.csv_table import CSVTableSplitter
 from rag_lib.loaders.csv_excel import CSVLoader, ExcelLoader
 from rag_lib.loaders.pdf import PDFLoader
 from rag_lib.summarizers.table import TableSummarizer
@@ -15,20 +15,28 @@ class MockSummarizer(TableSummarizer):
 def mock_summarizer():
     return MockSummarizer()
 
-def test_csv_loader_with_summary(tmp_path, mock_summarizer):
-    # Create dummy CSV
+def test_csv_splitter_with_summary(tmp_path, mock_summarizer):
     csv_file = tmp_path / "test.csv"
     df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
     df.to_csv(csv_file, index=False)
     
-    loader = CSVLoader(str(csv_file), summarizer=mock_summarizer)
-    segments = loader.load()
+    loader = CSVLoader(str(csv_file), output_format="csv")
+    docs = loader.load()
+
+    splitter = CSVTableSplitter(
+        max_rows_per_chunk=1,
+        summarizer=mock_summarizer,
+        summarize_table=True,
+        summarize_chunks=True,
+    )
+    segments = splitter.split_documents(docs)
     
-    assert len(segments) == 1
-    seg = segments[0]
-    assert "summary" in seg.metadata
-    assert "Summary of:" in seg.metadata["summary"]
-    assert "col1" in seg.content
+    assert len(segments) == 2
+    assert "table_summary" in segments[0].metadata
+    assert "Summary of:" in segments[0].metadata["table_summary"]
+    assert "chunk_summary" in segments[0].metadata
+    assert segments[0].metadata["table_summary"] == segments[1].metadata["table_summary"]
+    assert "col1,col2" in segments[0].content
 
 def test_excel_loader_with_summary(tmp_path, mock_summarizer):
     # Create dummy Excel
@@ -63,7 +71,7 @@ def test_pdf_loader_with_summary(mock_camelot, tmp_path, mock_summarizer):
     
     mock_camelot.read_pdf.return_value = [mock_table]
     
-    loader = PDFLoader("dummy.pdf", summarizer=mock_summarizer)
+    loader = PDFLoader("dummy.pdf", mode="table", summarizer=mock_summarizer)
     segments = loader.load()
     
     assert len(segments) == 1
@@ -71,14 +79,14 @@ def test_pdf_loader_with_summary(mock_camelot, tmp_path, mock_summarizer):
     assert "summary" in seg.metadata
     assert "Summary of:" in seg.metadata["summary"]
     # Check fallback / markdown
-    assert "Header" in seg.content
+    assert "Header" in seg.page_content
 
 def test_pdf_loader_poppler_error_msg():
     # Test that missing poppler raises clearer error
     with patch("rag_lib.loaders.pdf.camelot") as mock_camelot:
         mock_camelot.read_pdf.side_effect = Exception("Unable to find poppler")
         
-        loader = PDFLoader("dummy.pdf")
+        loader = PDFLoader("dummy.pdf", mode="table")
         with pytest.raises(RuntimeError) as excinfo:
             loader.load()
         
