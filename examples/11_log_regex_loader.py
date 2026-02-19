@@ -6,7 +6,7 @@ from example_utils import setup_environment, print_section
 # 1. Imports
 from rag_lib.loaders.regex import RegexHierarchyLoader
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from langchain_openai import OpenAIEmbeddings
 
 """
@@ -55,7 +55,7 @@ def main():
 
     # 3. Index
     embeddings = OpenAIEmbeddings()
-    vector_store = get_vector_store("chroma", embeddings, "11_log_regex")
+    vector_store = create_vector_store("chroma", embeddings, "11_log_regex")
     
     indexer = Indexer(vector_store, embeddings)
     indexer.index(segments)

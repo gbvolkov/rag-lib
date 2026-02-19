@@ -48,19 +48,19 @@ class ScoredMultiVectorRetriever(BaseRetriever):
     - parent = document loaded from doc store by `id_key` from retrieved children
 
     Parent scoring is computed only from currently retrieved children
-    (never from global tree/docstore/vectorstore scans).
+    (never from global tree/doc_store/vector_store scans).
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    vectorstore: VectorStore
+    vector_store: VectorStore
     """The underlying `VectorStore` to use to store small chunks
     and their embedding vectors"""
 
     byte_store: ByteStore | None = None
     """The lower-level backing storage layer for the parent documents"""
 
-    docstore: BaseStore[str, Document]
+    doc_store: BaseStore[str, Document]
     """The storage interface for the parent documents"""
 
     id_key: str = "doc_id"
@@ -88,13 +88,13 @@ class ScoredMultiVectorRetriever(BaseRetriever):
             raise ValueError(msg)
 
         byte_store = values.get("byte_store")
-        docstore = values.get("docstore")
+        doc_store = values.get("doc_store")
         if byte_store is not None:
-            docstore = create_kv_docstore(byte_store)
-        elif docstore is None:
-            msg = "You must pass a `byte_store` parameter."
+            doc_store = create_kv_docstore(byte_store)
+        elif doc_store is None:
+            msg = "You must pass a `doc_store` or `byte_store` parameter."
             raise ValueError(msg)
-        values["docstore"] = docstore
+        values["doc_store"] = doc_store
         return values
 
     def _clone_document(self, doc: Document) -> Document:
@@ -156,7 +156,7 @@ class ScoredMultiVectorRetriever(BaseRetriever):
         query: str,
     ) -> list[Document]:
         if self.search_type == SearchType.mmr:
-            docs = self.vectorstore.max_marginal_relevance_search(
+            docs = self.vector_store.max_marginal_relevance_search(
                 query,
                 **self.search_kwargs,
             )
@@ -164,13 +164,13 @@ class ScoredMultiVectorRetriever(BaseRetriever):
             kwargs = self.search_kwargs.copy()
             if self.score_threshold is not None and "score_threshold" not in kwargs:
                 kwargs["score_threshold"] = self.score_threshold
-            docs_and_scores = self.vectorstore.similarity_search_with_relevance_scores(
+            docs_and_scores = self.vector_store.similarity_search_with_relevance_scores(
                 query,
                 **kwargs,
             )
             docs = self._annotate_scores_from_hits(docs_and_scores)
         else:
-            docs = self.vectorstore.similarity_search(query, **self.search_kwargs)
+            docs = self.vector_store.similarity_search(query, **self.search_kwargs)
         return self._finalize_documents(docs)
 
     async def _asearch_children(
@@ -178,7 +178,7 @@ class ScoredMultiVectorRetriever(BaseRetriever):
         query: str,
     ) -> list[Document]:
         if self.search_type == SearchType.mmr:
-            docs = await self.vectorstore.amax_marginal_relevance_search(
+            docs = await self.vector_store.amax_marginal_relevance_search(
                 query,
                 **self.search_kwargs,
             )
@@ -186,13 +186,13 @@ class ScoredMultiVectorRetriever(BaseRetriever):
             kwargs = self.search_kwargs.copy()
             if self.score_threshold is not None and "score_threshold" not in kwargs:
                 kwargs["score_threshold"] = self.score_threshold
-            docs_and_scores = await self.vectorstore.asimilarity_search_with_relevance_scores(
+            docs_and_scores = await self.vector_store.asimilarity_search_with_relevance_scores(
                 query,
                 **kwargs,
             )
             docs = self._annotate_scores_from_hits(docs_and_scores)
         else:
-            docs = await self.vectorstore.asimilarity_search(query, **self.search_kwargs)
+            docs = await self.vector_store.asimilarity_search(query, **self.search_kwargs)
         return self._finalize_documents(docs)
 
     def _annotate_scores_from_hits(
@@ -249,7 +249,7 @@ class ScoredMultiVectorRetriever(BaseRetriever):
         if not ordered_ids:
             return ordered_ids, {}
 
-        loaded = self.docstore.mget(ordered_ids)
+        loaded = self.doc_store.mget(ordered_ids)
         parent_map: dict[str, Document] = {}
         for pid, doc in zip(ordered_ids, loaded):
             if doc is None:
@@ -267,7 +267,7 @@ class ScoredMultiVectorRetriever(BaseRetriever):
         if not ordered_ids:
             return ordered_ids, {}
 
-        loaded = await self.docstore.amget(ordered_ids)
+        loaded = await self.doc_store.amget(ordered_ids)
         parent_map: dict[str, Document] = {}
         for pid, doc in zip(ordered_ids, loaded):
             if doc is None:

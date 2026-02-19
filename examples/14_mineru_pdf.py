@@ -6,7 +6,7 @@ from example_utils import setup_environment, print_section
 # 1. Imports
 from rag_lib.loaders.miner_u import MinerULoader
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from langchain_openai import OpenAIEmbeddings
 
 """
@@ -51,7 +51,7 @@ def main():
 
     # 3. Index
     embeddings = OpenAIEmbeddings()
-    vector_store = get_vector_store("chroma", embeddings, "14_mineru")
+    vector_store = create_vector_store("chroma", embeddings, "14_mineru")
     
     indexer = Indexer(vector_store, embeddings)
     indexer.index(segments)

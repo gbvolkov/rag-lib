@@ -16,10 +16,10 @@ from rag_lib.core.domain import Segment
 from rag_lib.chunkers.recursive import RecursiveCharacterTextSplitter
 from rag_lib.processors.enricher import SegmentEnricher
 from rag_lib.core.indexer import Indexer
-from rag_lib.embeddings.factory import get_embeddings_model
-from rag_lib.vectors.factory import get_vector_store
-from rag_lib.retrieval.retrievers import get_vector_retriever
-from rag_lib.llm.factory import get_llm
+from rag_lib.embeddings.factory import create_embeddings_model
+from rag_lib.vectors.factory import create_vector_store
+from rag_lib.retrieval.retrievers import create_vector_retriever
+from rag_lib.llm.factory import create_llm
 
 """
 E2E Example 02: Markdown Enrichment + Vector Search Workflow
@@ -46,7 +46,7 @@ def main():
     
     # 4. Enrich
     print("Enriching segments...")
-    llm = get_llm(model="gpt-4.1-nano", provider="openai")
+    llm = create_llm(model_name="gpt-4.1-nano", provider="openai")
     enricher = SegmentEnricher(llm)
     enriched = enricher.enrich(segments)
     save_json_results(enriched, "02_markdown_enrichment_vector", "enriched_segments")
@@ -56,9 +56,9 @@ def main():
     print("\nIndexing into FAISS Vector Store...")
     try:
         # Use Factories
-        embeddings = get_embeddings_model(provider="openai")
+        embeddings = create_embeddings_model(provider="openai")
         # Note: factory returns a fresh store (potentially with a dummy doc)
-        vector_store = get_vector_store(provider="faiss", embeddings=embeddings)
+        vector_store = create_vector_store(provider="faiss", embeddings=embeddings)
         
         # Use Indexer
         # Indexer handles adding segments to the store
@@ -67,7 +67,7 @@ def main():
         
         # 6. Retrieve
         print("Retrieving using VectorRetriever...")
-        retriever = get_vector_retriever(vector_store=vector_store, k=2)
+        retriever = create_vector_retriever(vector_store=vector_store, top_k=2)
         
         query = "einstein quotes"
         results = retriever.invoke(query)

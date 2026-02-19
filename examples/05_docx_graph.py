@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -7,13 +7,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from example_utils import print_section, save_json_results, setup_environment
 
 from rag_lib.chunkers.regex_hierarchy import RegexHierarchySplitter
-from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.embeddings.factory import create_embeddings_model
 from rag_lib.graph.store import NetworkXGraphStore
 from rag_lib.loaders.docx import DocXLoader
-from rag_lib.llm.factory import get_llm
+from rag_lib.llm.factory import create_llm
 from rag_lib.processors.entity_extractor import EntityExtractor
 from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 """
 E2E Example 05: DOCX Graph Workflow
@@ -27,7 +27,7 @@ Features Tested:
 
 
 def _resolve_docx_path(docs_dir: Path) -> Optional[Path]:
-    preferred_name = "Параметризованные задачи.docx"
+    preferred_name = "????????????????? ??????.docx"
     preferred_path = docs_dir / preferred_name
     if preferred_path.exists():
         return preferred_path
@@ -107,7 +107,7 @@ def main() -> None:
 
     print_section("3. Graph Extraction")
     graph_store = NetworkXGraphStore()
-    llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
+    llm = create_llm(provider="openai", model_name="gpt-4.1-nano", temperature=0, streaming=False)
     extractor = EntityExtractor(llm=llm, store=graph_store)
 
     max_graph_segments = 10
@@ -149,9 +149,9 @@ def main() -> None:
         print("No valid segments for vector indexing. Exiting.")
         return
 
-    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     collection_name = f"docx_graph_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=collection_name,
@@ -228,7 +228,7 @@ def main() -> None:
             llm=llm,
         )
 
-        queries = ["Теория вероятности", "вероятность"]
+        queries = ["?????? ???????????", "???????????"]
         for query in queries:
             print(f"Query: {query}")
             results = retriever.invoke(query)

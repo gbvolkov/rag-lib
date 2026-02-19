@@ -8,12 +8,12 @@ from example_utils import print_section, save_json_results, setup_environment
 from rag_lib.chunkers.markdown_table import MarkdownTableSplitter
 from rag_lib.core.domain import SegmentType
 from rag_lib.core.indexer import Indexer
-from rag_lib.embeddings.factory import get_embeddings_model
-from rag_lib.llm.factory import get_llm
+from rag_lib.embeddings.factory import create_embeddings_model
+from rag_lib.llm.factory import create_llm
 from rag_lib.loaders.data_loaders import TextLoader
-from rag_lib.retrieval.retrievers import get_vector_retriever
+from rag_lib.retrieval.retrievers import create_vector_retriever
 from rag_lib.summarizers.table_llm import LLMTableSummarizer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 """
 E2E Example 07 (Markdown): Markdown Table Summary Workflow
@@ -52,11 +52,11 @@ def main() -> None:
     save_json_results(docs, "07_md_table_summary", "loaded_documents")
 
     print_section("2. Splitting Markdown Tables + Summaries")
-    llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
+    llm = create_llm(provider="openai", model_name="gpt-4.1-nano", temperature=0, streaming=False)
     summarizer = LLMTableSummarizer(llm=llm)
     splitter = MarkdownTableSplitter(
         split_table_rows=True,
-        max_rows_per_table_chunk=1,
+        max_rows_per_chunk=1,
         summarizer=summarizer,
         summarize_table=True,
         summarize_chunks=False,
@@ -80,9 +80,9 @@ def main() -> None:
     save_json_results(segments, "07_md_table_summary", "segments")
 
     print_section("3. Indexing Table Segments")
-    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     collection_name = f"07_md_table_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=collection_name,
@@ -97,7 +97,7 @@ def main() -> None:
     print_section("4. Retrieval")
     query = "какой канал имеет лучшую конверсию"
     print(f"Query: {query}")
-    retriever = get_vector_retriever(vector_store=vector_store, k=3)
+    retriever = create_vector_retriever(vector_store=vector_store, top_k=3)
     results = retriever.invoke(query)
     save_json_results(results, "07_md_table_summary", "retrieved_results")
 

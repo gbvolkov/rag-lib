@@ -96,7 +96,7 @@ def test_graph_retriever():
     assert all("graph_mode" in d.metadata for d in results)
 
 def test_retriever_factories():
-    from rag_lib.retrieval.retrievers import get_graph_retriever
+    from rag_lib.retrieval.retrievers import create_graph_retriever
     from rag_lib.retrieval.composition import create_graph_hybrid_retriever
     from langchain_core.retrievers import BaseRetriever
     from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -108,7 +108,7 @@ def test_retriever_factories():
             return []
 
     store = NetworkXGraphStore()
-    graph_retriever = get_graph_retriever(
+    graph_retriever = create_graph_retriever(
         vector_store=DummyStrictVectorStore(),
         graph_store=store,
         config=GraphQueryConfig(mode="local", enable_keyword_extraction=False),

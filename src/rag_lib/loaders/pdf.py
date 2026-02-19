@@ -21,12 +21,18 @@ except ImportError:
 class PDFLoader:
     """
     Loads PDF files.
-    Mode 'text' (default): Extracts text using pypdf. Returns 1 Document per file.
-    Mode 'table': Extracts tables using Camelot. Returns 1 Document per Table.
+    parse_mode 'text' (default): Extracts text using pypdf. Returns 1 Document per file.
+    parse_mode 'table': Extracts tables using Camelot. Returns 1 Document per Table.
     """
-    def __init__(self, file_path: str, mode: str = "text", summarizer: Optional[TableSummarizer] = None, backend: Optional[str] = None):
+    def __init__(
+        self,
+        file_path: str,
+        parse_mode: str = "text",
+        summarizer: Optional[TableSummarizer] = None,
+        backend: Optional[str] = None,
+    ):
         self.file_path = file_path
-        self.mode = mode
+        self.parse_mode = parse_mode
         self.summarizer = summarizer
         
         # Backend for Camelot
@@ -35,18 +41,18 @@ class PDFLoader:
         self.backend = backend
 
     def load(self) -> List[Document]:
-        logger.info(f"Loading PDF: {self.file_path} mode={self.mode}")
+        logger.info(f"Loading PDF: {self.file_path} mode={self.parse_mode}")
         
-        if self.mode == "text":
+        if self.parse_mode == "text":
             return self._load_text()
-        elif self.mode == "table":
+        elif self.parse_mode == "table":
             return self._load_tables()
         else:
-            raise ValueError(f"Unknown mode {self.mode}. Use 'text' or 'table'.")
+            raise ValueError(f"Unknown parse_mode {self.parse_mode}. Use 'text' or 'table'.")
 
     def _load_text(self) -> List[Document]:
         if pypdf is None:
-             raise ImportError("pypdf is required for PDFLoader(mode='text'). Install `pip install pypdf`.")
+             raise ImportError("pypdf is required for PDFLoader(parse_mode='text'). Install `pip install pypdf`.")
         
         try:
             reader = pypdf.PdfReader(self.file_path)
@@ -170,7 +176,7 @@ class PDFLoader:
 
     def _load_tables(self) -> List[Document]:
         if camelot is None:
-            raise ImportError("camelot-py is required for PDFLoader(mode='table'). Install with `pip install camelot-py[cv]`")
+            raise ImportError("camelot-py is required for PDFLoader(parse_mode='table'). Install with `pip install camelot-py[cv]`")
             
         documents = []
         try:

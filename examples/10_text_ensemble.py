@@ -6,7 +6,7 @@ from example_utils import setup_environment, print_section
 # 1. Imports
 from rag_lib.chunkers.sentence import SentenceSplitter
 from rag_lib.retrieval.composition import create_ensemble_retriever
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from langchain_openai import OpenAIEmbeddings
 
 """
@@ -57,7 +57,7 @@ def main():
     
     # Vector (Dense)
     embeddings = OpenAIEmbeddings()
-    vector_store = get_vector_store("chroma", embeddings, "10_text_ensemble")
+    vector_store = create_vector_store("chroma", embeddings, "10_text_ensemble")
     
     # Index for vector
     vector_store.add_texts(chunks)

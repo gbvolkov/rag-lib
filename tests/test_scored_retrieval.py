@@ -36,7 +36,7 @@ class TestScoredRetriever(unittest.TestCase):
         # 3. Create Retriever
         retriever = create_scored_dual_storage_retriever(
             vector_store=vector_store,
-            docstore=doc_store,
+            doc_store=doc_store,
             id_key="parent_id",
             search_kwargs={"k": 10}, # Get both chunks
             search_type=SearchType.similarity_score_threshold,

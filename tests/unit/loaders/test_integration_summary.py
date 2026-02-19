@@ -71,7 +71,7 @@ def test_pdf_loader_with_summary(mock_camelot, tmp_path, mock_summarizer):
     
     mock_camelot.read_pdf.return_value = [mock_table]
     
-    loader = PDFLoader("dummy.pdf", mode="table", summarizer=mock_summarizer)
+    loader = PDFLoader("dummy.pdf", parse_mode="table", summarizer=mock_summarizer)
     segments = loader.load()
     
     assert len(segments) == 1
@@ -86,7 +86,7 @@ def test_pdf_loader_poppler_error_msg():
     with patch("rag_lib.loaders.pdf.camelot") as mock_camelot:
         mock_camelot.read_pdf.side_effect = Exception("Unable to find poppler")
         
-        loader = PDFLoader("dummy.pdf", mode="table")
+        loader = PDFLoader("dummy.pdf", parse_mode="table")
         with pytest.raises(RuntimeError) as excinfo:
             loader.load()
         

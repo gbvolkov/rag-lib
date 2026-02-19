@@ -104,7 +104,7 @@ class TestPhase2(unittest.TestCase):
         mock_page.extract_text.return_value = "Page text"
         mock_reader.return_value.pages = [mock_page]
         
-        loader = PDFLoader("dummy.pdf", mode="text")
+        loader = PDFLoader("dummy.pdf", parse_mode="text")
         docs = loader.load()
         
         self.assertEqual(len(docs), 1)

@@ -13,7 +13,7 @@ from rag_lib.core.domain import Segment
 from rag_lib.loaders.pdf import PDFLoader
 from rag_lib.loaders.csv_excel import CSVLoader
 from rag_lib.chunkers.semantic import SemanticChunker
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from rag_lib.core.store import LocalPickleStore
 from rag_lib.core.index_builder import IndexBuilder
 from langchain_community.embeddings import FakeEmbeddings # For quick testing
@@ -69,7 +69,7 @@ def main():
 
     # Vector Store
     embeddings = get_embeddings()
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider=args.vector_provider,
         embeddings=embeddings,
         collection_name=args.collection

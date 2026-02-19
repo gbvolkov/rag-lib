@@ -15,7 +15,7 @@ def test_auto_detect_semicolon(tmp_path):
     assert "col1" in docs[0].page_content
     assert "col2" in docs[0].page_content
     assert docs[0].metadata["delimiter"] == ";"
-    assert docs[0].metadata["table_format"] == "markdown"
+    assert docs[0].metadata["output_format"] == "markdown"
 
 
 def test_csv_output_format_is_normalized_csv(tmp_path):
@@ -31,7 +31,7 @@ def test_csv_output_format_is_normalized_csv(tmp_path):
     assert lines[0] == "col,txt"
     assert lines[1] == "1,a"
     assert lines[2] == "2,b"
-    assert docs[0].metadata["table_format"] == "csv"
+    assert docs[0].metadata["output_format"] == "csv"
 
 
 def test_explicit_delimiter_override(tmp_path):

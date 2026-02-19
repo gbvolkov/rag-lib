@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from rag_lib.llm import factory as llm_factory
-from rag_lib.llm.factory import get_llm
+from rag_lib.llm.factory import create_llm
 
 def test_get_openai_base():
     with patch.object(llm_factory.settings, "openai_api_key", "sk-openai"):
@@ -9,7 +9,7 @@ def test_get_openai_base():
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             
-            get_llm(model="base", provider="openai", temperature=0.0)
+            create_llm(model_name="base", provider="openai", temperature=0.0)
             
             mock_openai.assert_called_with(
                 model="gpt-4o-mini",
@@ -27,7 +27,7 @@ def test_get_openai_base():
 def test_get_openai_think():
     with patch.object(llm_factory.settings, "openai_api_key_personal", "sk-think"):
         with patch("rag_lib.llm.factory.ChatOpenAI") as mock_openai:
-            get_llm(model="base", provider="openai_think", temperature=0.0)
+            create_llm(model_name="base", provider="openai_think", temperature=0.0)
             
             call_args = mock_openai.call_args
             assert call_args.kwargs["model_kwargs"]["reasoning"] == {"effort": "medium"}
@@ -36,7 +36,7 @@ def test_get_openai_think():
 def test_get_mistral():
     with patch.object(llm_factory.settings, "mistral_api_key", "mistral-key"):
         with patch("rag_lib.llm.factory.ChatMistralAI") as mock_mistral:
-            get_llm(model="mistral-large", provider="mistral", temperature=0.0)
+            create_llm(model_name="mistral-large", provider="mistral", temperature=0.0)
             mock_mistral.assert_called()
             assert mock_mistral.call_args.kwargs["model"] == "mistral-large"
             assert mock_mistral.call_args.kwargs["api_key"] == "mistral-key"
@@ -45,7 +45,7 @@ def test_get_yandex():
     with patch.object(llm_factory.settings, "ya_folder_id", "folder-123"):
         with patch.object(llm_factory.settings, "ya_api_key", "api-key-123"):
             with patch("rag_lib.llm.factory.ChatYandexGPT") as mock_yandex:
-                get_llm(model="yandexgpt-lite", provider="yandex", temperature=0.0)
+                create_llm(model_name="yandexgpt-lite", provider="yandex", temperature=0.0)
                 
                 mock_yandex.assert_called_with(
                     api_key="api-key-123",
@@ -53,3 +53,4 @@ def test_get_yandex():
                     model_uri="gpt://folder-123/yandexgpt-lite",
                     temperature=0.0,
                 )
+

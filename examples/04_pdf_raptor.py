@@ -15,11 +15,11 @@ from rag_lib.chunkers.sentence import SentenceSplitter
 from rag_lib.chunkers.language import detect_nltk_language
 from rag_lib.core.domain import Segment, SegmentType
 from rag_lib.processors.raptor import RaptorProcessor
-from rag_lib.llm.factory import get_llm
-from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.llm.factory import create_llm
+from rag_lib.embeddings.factory import create_embeddings_model
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
-from rag_lib.retrieval.retrievers import get_vector_retriever
+from rag_lib.vectors.factory import create_vector_store
+from rag_lib.retrieval.retrievers import create_vector_retriever
 
 """
 E2E Example 04: PDF RAPTOR Workflow
@@ -70,9 +70,9 @@ def main():
         return
 
     print(f"Loading {pdf_path}...")
-    loader = PDFLoader(str(pdf_path), mode="text")
+    loader = PDFLoader(str(pdf_path), parse_mode="text")
     docs = loader.load()
-    used_loader = "PDFLoader(mode='text')"
+    used_loader = "PDFLoader(parse_mode='text')"
 
     if not docs:
         print("No documents loaded from PDF. Exiting.")
@@ -119,8 +119,8 @@ def main():
         return
 
     # 4. RAPTOR Processing
-    llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
-    embeddings = get_embeddings_model(provider="openai")
+    llm = create_llm(provider="openai", model_name="gpt-4.1-nano", temperature=0, streaming=False)
+    embeddings = create_embeddings_model(provider="openai")
     summary_prompt_template = None
 
     print("Initializing RAPTOR Processor...")
@@ -170,13 +170,13 @@ def main():
     print("\nIndexing into Chroma (04_pdf_raptor)...")
     doc_store = InMemoryStore()
 
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name="04_pdf_raptor",
     )
     indexer = Indexer(vector_store=vector_store, embeddings=embeddings, doc_store=doc_store)
-    indexer.index(raptor_tree, parents=raptor_tree)
+    indexer.index(raptor_tree, parent_segments=raptor_tree)
 
 
 
@@ -185,16 +185,16 @@ def main():
     print("\nRetrieving from RAPTOR Tree...")
     use_dual = True
     if not use_dual:
-        retriever = get_vector_retriever(
+        retriever = create_vector_retriever(
             vector_store=vector_store,
-            k=10,
+            top_k=10,
             search_type="similarity_score_threshold",
             score_threshold=0.0,
         )
     else:
         retriever = create_scored_dual_storage_retriever(
             vector_store=vector_store,
-            docstore=doc_store,
+            doc_store=doc_store,
             id_key="parent_id",
             search_kwargs={"k": 10},
             search_type="similarity_score_threshold",

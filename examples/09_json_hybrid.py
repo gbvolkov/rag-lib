@@ -6,7 +6,7 @@ from example_utils import setup_environment, print_section
 # 1. Imports
 from rag_lib.loaders.data_loaders import JsonLoader
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from langchain_openai import OpenAIEmbeddings
 
 """
@@ -56,7 +56,7 @@ def main():
 
     # 3. Index
     embeddings = OpenAIEmbeddings()
-    vector_store = get_vector_store("chroma", embeddings, "09_json_hybrid")
+    vector_store = create_vector_store("chroma", embeddings, "09_json_hybrid")
     
     indexer = Indexer(vector_store, embeddings)
     indexer.index(segments)

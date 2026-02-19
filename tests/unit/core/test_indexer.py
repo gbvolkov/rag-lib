@@ -84,3 +84,17 @@ def test_indexer_triggers_graph_extraction(mock_vector_store, mock_embeddings):
     
     # Assert process_segments called
     mock_extractor.process_segments.assert_called_once_with([seg])
+
+
+def test_indexer_parent_segments_canonical(mock_vector_store, mock_embeddings):
+    mock_doc_store = MagicMock()
+    indexer = Indexer(mock_vector_store, mock_embeddings, doc_store=mock_doc_store)
+
+    child = Segment(content="Child", type=SegmentType.TEXT)
+    parent = Segment(content="Parent", type=SegmentType.TEXT)
+
+    indexer.index([child], parent_segments=[parent])
+
+    mock_doc_store.mset.assert_called_once()
+    stored_pairs = mock_doc_store.mset.call_args.args[0]
+    assert stored_pairs[0][0] == parent.segment_id

@@ -21,7 +21,7 @@ from rag_lib.core.indexer import Indexer
 from rag_lib.graph.store import NetworkXGraphStore
 from rag_lib.loaders.docx import DocXLoader
 from rag_lib.processors.entity_extractor import EntityExtractor
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 
 def main() -> None:
@@ -93,7 +93,7 @@ def main() -> None:
         shutil.rmtree(demo_db_path)
 
     print(f"Initializing Vector Store: {collection_name}")
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=collection_name,

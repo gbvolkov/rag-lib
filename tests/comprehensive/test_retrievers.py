@@ -134,7 +134,7 @@ def test_dual_storage_hydration_with_custom_id_key():
 
     dual = create_dual_storage_retriever(
         vector_store=vector_store,
-        docstore=doc_store,
+        doc_store=doc_store,
         id_key="id",
         search_kwargs={"k": 1},
     )

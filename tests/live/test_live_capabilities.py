@@ -1,8 +1,8 @@
 import os
 import pytest
 from dotenv import load_dotenv
-from rag_lib.embeddings.factory import get_embeddings_model
-from rag_lib.llm.factory import get_llm
+from rag_lib.embeddings.factory import create_embeddings_model
+from rag_lib.llm.factory import create_llm
 from rag_lib.chunkers.semantic import SemanticChunker
 from rag_lib.summarizers.table_llm import LLMTableSummarizer
 from rag_lib.core.domain import Segment
@@ -19,7 +19,7 @@ def test_live_semantic_chunking():
     
     # 1. Initialize Real Embeddings
     print("Initializing OpenAI Embeddings...")
-    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     
     # 2. Initialize Chunker
     chunker = SemanticChunker(embeddings=embeddings, threshold=0.6) # Slightly lower threshold for real world? 
@@ -64,7 +64,7 @@ def test_live_table_summarization():
     try:
         # 1. Initialize Real LLM
         print("Initializing OpenAI Chat Model (gpt-4o-mini)...")
-        llm = get_llm(provider="openai", model="base")
+        llm = create_llm(provider="openai", model_name="base")
         
         # 2. Initialize Summarizer
         summarizer = LLMTableSummarizer(llm=llm)

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from rag_lib.embeddings import factory as embeddings_factory
-from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.embeddings.factory import create_embeddings_model
 
 def test_get_openai_embeddings():
     with patch.object(embeddings_factory.settings, "openai_api_key", "test-openai-key"):
@@ -10,7 +10,7 @@ def test_get_openai_embeddings():
             mock_openai.return_value = mock_instance
             
             # Test Default
-            result = get_embeddings_model(provider="openai")
+            result = create_embeddings_model(provider="openai")
             mock_openai.assert_called_with(model="text-embedding-3-small", api_key="test-openai-key")
             assert result == mock_instance
 
@@ -20,7 +20,7 @@ def test_get_local_embeddings():
         mock_hf.return_value = mock_instance
 
         # Test Default
-        result = get_embeddings_model(provider="local")
+        result = create_embeddings_model(provider="local")
         mock_hf.assert_called_with(
             model_name="intfloat/multilingual-e5-large",
             model_kwargs={'device': 'cpu'},
@@ -30,4 +30,4 @@ def test_get_local_embeddings():
 
 def test_invalid_provider():
     with pytest.raises(ValueError):
-        get_embeddings_model(provider="unknown")
+        create_embeddings_model(provider="unknown")

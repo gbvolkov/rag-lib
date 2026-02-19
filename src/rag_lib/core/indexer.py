@@ -33,13 +33,18 @@ class Indexer:
         self.entity_extractor = entity_extractor
         self.doc_store = doc_store
 
-    def index(self, segments: List[Segment], parents: Optional[List[Segment]] = None, batch_size: int = 100) -> None:
+    def index(
+        self,
+        segments: List[Segment],
+        parent_segments: Optional[List[Segment]] = None,
+        batch_size: int = 100,
+    ) -> None:
         """
         Indexes a list of segments into the vector store.
         
         Args:
             segments: List of segments (or chunks) to be indexed in VectorStore.
-            parents: Optional list of parent segments to be stored in DocStore (Dual Storage).
+            parent_segments: Optional list of parent segments to be stored in DocStore (Dual Storage).
                      If provided, these are stored in doc_store (if configured).
                      If NOT provided but doc_store IS configured, 'segments' are stored in doc_store.
             batch_size: Batch size for vector indexing.
@@ -61,7 +66,7 @@ class Indexer:
 
         # 2. DocStore Storage (Dual Storage Pattern)
         if self.doc_store:
-            docs_to_store = parents if parents else segments
+            docs_to_store = parent_segments if parent_segments else segments
             logger.info(f"Storing {len(docs_to_store)} documents in DocStore...")
             
             # Map segment_id -> LangChain Document (for compatibility with Retrievers)
@@ -129,7 +134,12 @@ class Indexer:
             ids=ids
         )
 
-    async def aindex(self, segments: List[Segment], parents: Optional[List[Segment]] = None, batch_size: int = 100) -> None:
+    async def aindex(
+        self,
+        segments: List[Segment],
+        parent_segments: Optional[List[Segment]] = None,
+        batch_size: int = 100,
+    ) -> None:
         """
         Async version of index.
         """
@@ -148,7 +158,7 @@ class Indexer:
 
         # 2. DocStore Storage
         if self.doc_store:
-            docs_to_store = parents if parents else segments
+            docs_to_store = parent_segments if parent_segments else segments
             logger.info(f"Storing {len(docs_to_store)} documents in DocStore (Async)...")
             pairs = [(s.segment_id, s.to_langchain()) for s in docs_to_store]
             try:

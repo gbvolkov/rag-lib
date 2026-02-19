@@ -28,7 +28,12 @@ def detect_csv_delimiter(text: str, fallback: str = ",") -> str:
         return fallback
 
 
-def parse_csv_table(text: str, delimiter: Optional[str] = None) -> tuple[ParsedTable, str]:
+def parse_csv_table(
+    text: str,
+    delimiter: Optional[str] = None,
+    *,
+    use_first_row_as_header: bool = True,
+) -> tuple[ParsedTable, str]:
     resolved_delimiter = delimiter or detect_csv_delimiter(text)
     if not text.strip():
         return ParsedTable(header=[], rows=[]), resolved_delimiter
@@ -38,9 +43,16 @@ def parse_csv_table(text: str, delimiter: Optional[str] = None) -> tuple[ParsedT
     if not rows:
         return ParsedTable(header=[], rows=[]), resolved_delimiter
 
-    header = rows[0]
-    width = len(header)
-    normalized_rows = [_normalize_row(row, width) for row in rows[1:]]
+    if use_first_row_as_header:
+        header = rows[0]
+        width = len(header)
+        normalized_rows = [_normalize_row(row, width) for row in rows[1:]]
+    else:
+        width = max(len(row) for row in rows)
+        if width == 0:
+            return ParsedTable(header=[], rows=[]), resolved_delimiter
+        header = _generate_column_names(width)
+        normalized_rows = [_normalize_row(row, width) for row in rows]
     return ParsedTable(header=header, rows=normalized_rows), resolved_delimiter
 
 
@@ -54,26 +66,31 @@ def render_csv_table(header: List[str], rows: List[List[str]], delimiter: str = 
     return buffer.getvalue().rstrip("\n")
 
 
-def parse_markdown_table(text: str) -> ParsedTable:
+def parse_markdown_table(text: str, *, use_first_row_as_header: bool = True) -> ParsedTable:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if len(lines) < 2:
         return ParsedTable(header=[], rows=[])
 
-    header = _split_markdown_row(lines[0])
-    if not header:
+    first_row = _split_markdown_row(lines[0])
+    if not first_row:
         return ParsedTable(header=[], rows=[])
 
-    if not _is_markdown_separator_row(lines[1], expected_columns=len(header)):
+    if not _is_markdown_separator_row(lines[1], expected_columns=len(first_row)):
         return ParsedTable(header=[], rows=[])
 
     rows: List[List[str]] = []
-    width = len(header)
+    width = len(first_row)
     for line in lines[2:]:
         if "|" not in line:
             continue
         row = _normalize_row(_split_markdown_row(line), width)
         rows.append(row)
 
+    if not use_first_row_as_header:
+        data_rows = [_normalize_row(first_row, width), *rows]
+        return ParsedTable(header=_generate_column_names(width), rows=data_rows)
+
+    header = first_row
     return ParsedTable(header=header, rows=rows)
 
 
@@ -208,3 +225,7 @@ def _is_markdown_separator_row(line: str, expected_columns: int) -> bool:
 
 def _escape_markdown_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", "<br>")
+
+
+def _generate_column_names(width: int) -> List[str]:
+    return [f"Column{i}" for i in range(1, width + 1)]

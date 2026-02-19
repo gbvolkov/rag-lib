@@ -22,7 +22,7 @@ def test_miner_u_load_returns_markdown_document(tmp_path: Path):
     pdf_path.write_bytes(b"%PDF-1.4\n")
 
     with patch.object(MinerULoader, "_ensure_available", return_value=None):
-        loader = MinerULoader(file_path=str(pdf_path), method="auto")
+        loader = MinerULoader(file_path=str(pdf_path), parse_mode="auto")
 
     with patch.object(loader, "_run_mineru_cli", return_value=["mineru", "-p"]), patch.object(
         loader, "_read_markdown_output", return_value="# Heading\n\nBody"
@@ -34,7 +34,7 @@ def test_miner_u_load_returns_markdown_document(tmp_path: Path):
     assert docs[0].metadata["source"] == str(pdf_path)
     assert docs[0].metadata["parser"] == "MinerU"
     assert docs[0].metadata["output_format"] == "markdown"
-    assert docs[0].metadata["mineru_method"] == "auto"
+    assert docs[0].metadata["mineru_parse_mode"] == "auto"
 
 
 def test_run_mineru_cli_fallback_to_second_command(tmp_path: Path):
@@ -144,7 +144,7 @@ def test_candidate_commands_include_cli_options(tmp_path: Path):
     ), patch.object(MinerULoader, "_has_module_spec", return_value=False):
         loader = MinerULoader(
             file_path=str(tmp_path / "dummy.pdf"),
-            method="txt",
+            parse_mode="txt",
             backend="pipeline",
             lang="cyrillic",
             server_url="http://127.0.0.1:30000",

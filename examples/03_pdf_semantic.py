@@ -15,9 +15,9 @@ from rag_lib.loaders.pymupdf import PyMuPDFLoader
 from rag_lib.chunkers.semantic import SemanticChunker
 from rag_lib.chunkers.regex_hierarchy import RegexHierarchySplitter
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
-from rag_lib.embeddings.factory import get_embeddings_model
-from rag_lib.retrieval.retrievers import get_vector_retriever
+from rag_lib.vectors.factory import create_vector_store
+from rag_lib.embeddings.factory import create_embeddings_model
+from rag_lib.retrieval.retrievers import create_vector_retriever
 from rag_lib.retrieval.composition import create_reranking_retriever
 
 """
@@ -71,12 +71,12 @@ def main():
         docs = pymupdf_loader.load()
         used_loader = "PyMuPDFLoader(markdown)"
     except Exception as e:
-        print(f"PyMuPDFLoader unavailable/failed: {e}. Falling back to PDFLoader(mode='text').")
+        print(f"PyMuPDFLoader unavailable/failed: {e}. Falling back to PDFLoader(parse_mode='text').")
 
     if not docs:
-        loader = PDFLoader(str(pdf_path), mode="text")
+        loader = PDFLoader(str(pdf_path), parse_mode="text")
         docs = loader.load()
-        used_loader = "PDFLoader"
+        used_loader = "PDFLoader(parse_mode='text')"
 
     print(f"Loaded via {used_loader}.")
     print(f"Loaded {len(docs)} documents (pages/files).")
@@ -85,7 +85,7 @@ def main():
     #    3.1 Structured split: split_documents(...) -> List[Segment]
     #    3.2 Semantic split:   split_segments(...)  -> List[Segment]
     print("Structured + Semantic Chunking (this may take a moment)...")
-    embeddings = get_embeddings_model(provider="openai")
+    embeddings = create_embeddings_model(provider="openai")
 
     # Stage 1: Structured splitter by heading-like lines.
     # A conservative set that works for markdown headings, numbered headings,
@@ -133,7 +133,7 @@ def main():
 
     # 4. Index
     print("\nIndexing into Chroma (03_pdf_semantic)...")
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma", 
         embeddings=embeddings, 
         collection_name="03_pdf_semantic"
@@ -145,7 +145,7 @@ def main():
     print("\nRetrieving with Cross-Encoder Reranking...")
     
     # Base Retriever (Vector)
-    base_retriever = get_vector_retriever(vector_store=vector_store, k=10)#, search_type="similarity_score_threshold", score_threshold=0.2)
+    base_retriever = create_vector_retriever(vector_store=vector_store, top_k=10)#, search_type="similarity_score_threshold", score_threshold=0.2)
     
     query = "Что такое морфология?" # Relevant for Russian Grammar PDF
     # Determine appropriate query based on file loaded? 
@@ -163,7 +163,7 @@ def main():
         # Note: 'device="cpu"' is safer for general environments without CUDA
         reranker = create_reranking_retriever(
             base_retriever,     
-            top_n=3,
+            top_k=3,
             reranker_model="BAAI/bge-reranker-v2-m3", # Good multilingual reranker
             max_score_ratio=0.08, #ratio of max similarity score
             device="cpu" 

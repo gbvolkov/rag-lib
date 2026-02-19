@@ -13,7 +13,8 @@ except ImportError:
 
 from rag_lib.config import settings
 
-def get_embeddings_model(
+
+def create_embeddings_model(
     provider: Optional[str] = None, 
     model_name: Optional[str] = None
 ) -> Embeddings:

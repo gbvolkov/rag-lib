@@ -844,7 +844,7 @@ class GraphRetriever(BaseRetriever):
         return self._docs_to_chunks(query=query, rows=scored_rows[:top_k])
     def _hydrate_from_docstore_sync(self, segment_ids: List[str]) -> List[Document]:
         if self.doc_store is None:
-            raise GraphConfigurationError("doc_store is required for docstore hydration")
+            raise GraphConfigurationError("doc_store is required for document-store hydration")
         mget = getattr(self.doc_store, "mget", None)
         if not callable(mget):
             raise GraphCapabilityError("doc_store.mget is required")
@@ -855,7 +855,7 @@ class GraphRetriever(BaseRetriever):
 
     async def _hydrate_from_docstore_async(self, segment_ids: List[str]) -> List[Document]:
         if self.doc_store is None:
-            raise GraphConfigurationError("doc_store is required for docstore hydration")
+            raise GraphConfigurationError("doc_store is required for document-store hydration")
         amget = getattr(self.doc_store, "amget", None)
         if not callable(amget):
             raise GraphCapabilityError("doc_store.amget is required for async hydration")

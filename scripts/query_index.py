@@ -13,8 +13,8 @@ try:
     from rag_lib.retrieval.retrievers import (
         RegexRetriever, 
         FuzzyRetriever,
-        get_bm25_retriever,
-        get_vector_retriever
+        create_bm25_retriever,
+        create_vector_retriever,
     )
     from rag_lib.retrieval.composition import (
         create_ensemble_retriever,
@@ -67,7 +67,7 @@ def main():
              retriever = RegexRetriever(documents=[]) # Mock fallthrough
              
     elif mode == "bm25":
-        retriever = get_bm25_retriever(docs)
+        retriever = create_bm25_retriever(docs)
         
     elif mode == "vector":
         # Check for vector store dependencies
@@ -75,8 +75,8 @@ def main():
             from langchain_community.vectorstores import FAISS
             from langchain_community.embeddings import FakeEmbeddings
             embeddings = FakeEmbeddings(size=768)
-            vectorstore = FAISS.from_documents(docs, embeddings)
-            retriever = get_vector_retriever(vectorstore)
+            vector_store = FAISS.from_documents(docs, embeddings)
+            retriever = create_vector_retriever(vector_store, top_k=top_k)
         except ImportError:
              logger.error("FAISS or Embeddings not available. Cannot use vector mode.")
              sys.exit(1)
@@ -87,10 +87,10 @@ def main():
             from langchain_community.vectorstores import FAISS
             from langchain_community.embeddings import FakeEmbeddings
             embeddings = FakeEmbeddings(size=768)
-            vectorstore = FAISS.from_documents(docs, embeddings)
+            vector_store = FAISS.from_documents(docs, embeddings)
             
-            vec_retriever = get_vector_retriever(vectorstore)
-            bm25_retriever = get_bm25_retriever(docs)
+            vec_retriever = create_vector_retriever(vector_store, top_k=top_k)
+            bm25_retriever = create_bm25_retriever(docs, top_k=top_k)
             
             retriever = create_ensemble_retriever([vec_retriever, bm25_retriever], weights=[0.5, 0.5])
         except ImportError:
@@ -99,10 +99,10 @@ def main():
              
     elif mode == "rerank":
         # BM25 + Reranker
-        bm25_retriever = get_bm25_retriever(docs)
+        bm25_retriever = create_bm25_retriever(docs, top_k=top_k)
         # Note: This requires sentence-transformers/torch
         try:
-            retriever = create_reranking_retriever(bm25_retriever, top_n=top_k)
+            retriever = create_reranking_retriever(bm25_retriever, top_k=top_k)
         except Exception as e:
             logger.error(f"Failed to init Reranker (likely missing model/libs): {e}")
             sys.exit(1)
@@ -117,7 +117,7 @@ def main():
             
             embeddings = FakeEmbeddings(size=768)
             # Index summaries (mocked as docs content for now)
-            vectorstore = FAISS.from_documents(docs, embeddings)
+            vector_store = FAISS.from_documents(docs, embeddings)
             
             # Doc Store (Has "FULL" content)
             doc_store = InMemoryStore()
@@ -127,7 +127,11 @@ def main():
             }
             doc_store.mset(list(full_docs.items()))
             
-            retriever = create_dual_storage_retriever(vectorstore, doc_store, id_key="id")
+            retriever = create_dual_storage_retriever(
+                vector_store=vector_store,
+                doc_store=doc_store,
+                id_key="id",
+            )
             
         except ImportError:
              logger.error("Dependencies missing for Dual Storage.")

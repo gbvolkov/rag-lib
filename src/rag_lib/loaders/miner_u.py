@@ -22,7 +22,7 @@ class MinerULoader:
     def __init__(
         self,
         file_path: str,
-        method: str = "auto",
+        parse_mode: str = "auto",
         backend: Optional[str] = None,
         lang: Optional[str] = None,
         server_url: Optional[str] = None,
@@ -37,7 +37,7 @@ class MinerULoader:
         keep_temp_artifacts: bool = False,
     ):
         self.file_path = file_path
-        self.method = method
+        self.parse_mode = parse_mode
         self.backend = backend
         self.lang = lang
         self.server_url = server_url
@@ -53,8 +53,8 @@ class MinerULoader:
         self._last_cli_stdout = ""
         self._last_cli_stderr = ""
 
-        if self.method not in {"auto", "txt", "ocr"}:
-            raise ValueError("method must be one of: auto, txt, ocr")
+        if self.parse_mode not in {"auto", "txt", "ocr"}:
+            raise ValueError("parse_mode must be one of: auto, txt, ocr")
         if self.backend is not None and self.backend not in {
             "pipeline",
             "hybrid-auto-engine",
@@ -98,7 +98,7 @@ class MinerULoader:
             "source": self.file_path,
             "parser": "MinerU",
             "output_format": "markdown",
-            "mineru_method": self.method,
+            "mineru_parse_mode": self.parse_mode,
             "mineru_command": " ".join(used_command),
         }
         if self.backend:
@@ -159,7 +159,7 @@ class MinerULoader:
         return None
 
     def _candidate_commands(self, output_dir: str) -> List[List[str]]:
-        base_args = ["-p", self.file_path, "-o", output_dir, "-m", self.method]
+        base_args = ["-p", self.file_path, "-o", output_dir, "-m", self.parse_mode]
         if self.backend:
             base_args.extend(["-b", self.backend])
         if self.lang:

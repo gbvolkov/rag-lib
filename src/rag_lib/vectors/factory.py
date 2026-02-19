@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Optional
 from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
 from rag_lib.config import Settings
@@ -24,11 +24,11 @@ try:
 except ImportError:
     PGVector = None
 
-def get_vector_store(
+def create_vector_store(
     provider: str = "chroma",
     embeddings: Optional[Embeddings] = None,
     collection_name: str = "rag_collection",
-    connection_string: Optional[str] = None,
+    connection_uri: Optional[str] = None,
     cleanup: bool = True,
 ) -> VectorStore:
     """
@@ -38,7 +38,7 @@ def get_vector_store(
         provider: 'chroma', 'faiss', 'qdrant', 'postgres'
         embeddings: Initialized Embeddings model (required for most stores)
         collection_name: Name of the collection/table
-        connection_string: DB URL for Postgres/Qdrant
+        connection_uri: DB URL for Postgres/Qdrant
         cleanup: If True, delete existing collection before returning the store (Chroma).
     """
     if embeddings is None:
@@ -90,7 +90,7 @@ def get_vector_store(
         if Qdrant is None:
             raise ImportError("langchain-qdrant is not installed. Please install it.")
             
-        if not connection_string:
+        if not connection_uri:
              # In-memory
              return Qdrant(
                  client=None, 
@@ -101,20 +101,20 @@ def get_vector_store(
         return Qdrant.from_existing_collection(
             embedding=embeddings,
             collection_name=collection_name,
-            url=connection_string
+            url=connection_uri
         )
 
     elif provider == "postgres":
         if PGVector is None:
             raise ImportError("langchain-postgres and psycopg are not installed. Please install them.")
             
-        if not connection_string:
-            raise ValueError("Connection string required for Postgres vector store")
+        if not connection_uri:
+            raise ValueError("connection_uri is required for Postgres vector store")
             
         return PGVector(
             embeddings=embeddings,
             collection_name=collection_name,
-            connection=connection_string,
+            connection=connection_uri,
             use_jsonb=True,
         )
 

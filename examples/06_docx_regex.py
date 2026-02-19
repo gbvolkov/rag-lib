@@ -9,10 +9,10 @@ from example_utils import print_section, save_json_results, setup_environment
 
 from rag_lib.chunkers.regex import RegexSplitter
 from rag_lib.core.indexer import Indexer
-from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.embeddings.factory import create_embeddings_model
 from rag_lib.loaders.docx import DocXLoader
-from rag_lib.retrieval.retrievers import get_vector_retriever
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.retrieval.retrievers import create_vector_retriever
+from rag_lib.vectors.factory import create_vector_store
 
 """
 E2E Example 06: DOCX Regex Workflow
@@ -143,9 +143,9 @@ def main() -> None:
             print("No regex matches for this query.")
 
     print_section("4. Vector Retrieval (Secondary)")
-    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     collection_name = f"06_docx_regex_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=collection_name,
@@ -157,7 +157,7 @@ def main() -> None:
 
     for vector_query in queries:
         print(f"Vector query: {vector_query}")
-        vector_retriever = get_vector_retriever(vector_store=vector_store, k=5)
+        vector_retriever = create_vector_retriever(vector_store=vector_store, top_k=5)
         vector_results = vector_retriever.invoke(vector_query)
         save_json_results(
             vector_results,

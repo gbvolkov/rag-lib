@@ -42,9 +42,9 @@ def create_ensemble_retriever(
 
 def create_dual_storage_retriever(
     vector_store: VectorStore, 
-    docstore: BaseStore[str, Document], # Renamed to standard docstore
+    doc_store: BaseStore[str, Document],
     id_key: str = "segment_id",
-    search_kwargs: Optional[Dict[str, Any]] = None
+    search_kwargs: Optional[Dict[str, Any]] = None,
 ) -> MultiVectorRetriever:
     """
     Creates a MultiVectorRetriever (Dual Storage) which uses:
@@ -56,10 +56,9 @@ def create_dual_storage_retriever(
     LangChain expects mget to return things that can be treated as Documents or bytes?
     Actually MultiVectorRetriever just returns whatever doc_store.mget returns.
     """
-
     retriever = MultiVectorRetriever(
         vectorstore=vector_store,
-        docstore=docstore, 
+        docstore=doc_store, 
         id_key=id_key,
         search_kwargs=search_kwargs or {},
         search_type="similarity_score_threshold"
@@ -74,7 +73,7 @@ from rag_lib.retrieval.scored_retriever import (
 
 def create_scored_dual_storage_retriever(
     vector_store: VectorStore,
-    docstore: BaseStore[str, Document],
+    doc_store: BaseStore[str, Document],
     id_key: str = "segment_id",
     search_kwargs: Optional[Dict[str, Any]] = None,
     search_type: SearchType = SearchType.similarity,
@@ -90,8 +89,8 @@ def create_scored_dual_storage_retriever(
     Parent scores are computed only from retrieved children.
     """
     return ScoredMultiVectorRetriever(
-        vectorstore=vector_store,
-        docstore=docstore,
+        vector_store=vector_store,
+        doc_store=doc_store,
         id_key=id_key,
         search_kwargs=search_kwargs or {},
         search_type=search_type,
@@ -103,9 +102,9 @@ def create_scored_dual_storage_retriever(
 def create_reranking_retriever(
     base_retriever_or_list: Union[BaseRetriever, List[BaseRetriever]],
     reranker_model: Union[str, BaseCrossEncoder] = "BAAI/bge-reranker-base",
-    top_n: int = 5,
+    top_k: int = 5,
     max_score_ratio: float = 0.0, #ratio of maximum score value
-    device: str = "cpu"
+    device: str = "cpu",
 ) -> ContextualCompressionRetriever:
     """
     Wraps a base retriever (or list of them) with a Cross-Encoder Reranker.
@@ -113,7 +112,7 @@ def create_reranking_retriever(
     Args:
         base_retriever_or_list: Single retriever or list (will be Auto-Ensembled).
         reranker_model: HuggingFace model name or a pre-built BaseCrossEncoder.
-        top_n: Number of docs to return after reranking.
+        top_k: Number of docs to return after reranking.
     """
     # 1. Handle List -> Ensemble
     if isinstance(base_retriever_or_list, list):
@@ -133,7 +132,7 @@ def create_reranking_retriever(
         model = reranker_model
 
     compressor = TournamentCrossEncoderReranker(
-        model=model, top_n=top_n, tournament_size=10, min_ratio=max_score_ratio
+        model=model, top_n=top_k, tournament_size=10, min_ratio=max_score_ratio
     )
     # 3. Create Compression Retriever
     return ContextualCompressionRetriever(

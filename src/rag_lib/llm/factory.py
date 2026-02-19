@@ -19,8 +19,8 @@ except ImportError:
 
 from rag_lib.config import settings
 
-def get_llm(
-    model: Optional[str] = None, 
+def create_llm(
+    model_name: Optional[str] = None,
     provider: Optional[str] = None,
     temperature: Optional[float] = None, 
     frequency_penalty: Optional[float] = None,
@@ -34,23 +34,23 @@ def get_llm(
     """
     # Load defaults from settings if not provided
     provider = provider or settings.llm.provider
-    model = model or settings.llm.model
+    resolved_model_name = model_name or settings.llm.model
     if temperature is None:
         temperature = settings.llm.temperature
     
     # Determine Model Name based on aliases or pass through
     # Real implementation would map "base" -> "gpt-4o-mini" etc.
     # For now we use exact strings or placeholders
-    llm_model = model 
-    if provider == "openai" and model == "base":
+    llm_model = resolved_model_name
+    if provider == "openai" and resolved_model_name == "base":
         llm_model = "gpt-4o-mini" # Example default
     
     if provider == "openai":
         if ChatOpenAI is None:
             raise ImportError("langchain-openai is not installed. Please install it.")
         # logic for 'base' verbosity
-        verbosity = "low" if model == "base" else "medium"
-        reasoning = "none" if model == "base" else "minimal"
+        verbosity = "low" if resolved_model_name == "base" else "medium"
+        reasoning = "none" if resolved_model_name == "base" else "minimal"
         
         return ChatOpenAI(
             model=llm_model,
@@ -68,10 +68,10 @@ def get_llm(
     elif provider == "openai_think":
         if ChatOpenAI is None:
             raise ImportError("langchain-openai is not installed. Please install it.")
-        verbosity = "low" if model == "base" else "medium"
+        verbosity = "low" if resolved_model_name == "base" else "medium"
         reasoning = {
             "effort": "medium"
-        } if model == "base" else {
+        } if resolved_model_name == "base" else {
             "effort": "minimal"
         }
 

@@ -55,8 +55,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         # 3. Create Retriever with Threshold
         threshold = 0.8
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
             score_threshold=threshold
@@ -80,8 +80,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         doc_store = InMemoryStore()
         with self.assertRaises(ValueError):
             ScoredMultiVectorRetriever(
-                vectorstore=mock_vectorstore,
-                docstore=doc_store,
+                vector_store=mock_vectorstore,
+                doc_store=doc_store,
                 id_key="pid",
                 search_type=SearchType.similarity_score_threshold,
                 search_threshold=0.5,
@@ -95,8 +95,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         mock_vectorstore.mock_search.return_value = [(orphan_chunk, 0.77)]
 
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
             score_threshold=0.5,
@@ -124,8 +124,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         ]
 
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
         )
@@ -167,8 +167,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         doc_store.mget = tracked_mget  # type: ignore[method-assign]
 
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
             hydration_mode=HydrationMode.parents_replace,
@@ -198,8 +198,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         ]
 
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
             hydration_mode=HydrationMode.children_plus_parents,
@@ -224,8 +224,8 @@ class TestScoredRetrieverThreshold(unittest.TestCase):
         mock_vectorstore.mock_search.return_value = [(child_a, 0.8)]
 
         retriever = ScoredMultiVectorRetriever(
-            vectorstore=mock_vectorstore,
-            docstore=doc_store,
+            vector_store=mock_vectorstore,
+            doc_store=doc_store,
             id_key="pid",
             search_type=SearchType.similarity_score_threshold,
             hydration_mode=HydrationMode.children_enriched,

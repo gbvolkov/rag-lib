@@ -26,7 +26,7 @@ from rag_lib.core.domain import Segment, SegmentType
 from rag_lib.processors.enricher import SegmentEnricher
 from rag_lib.chunkers.recursive import RecursiveCharacterTextSplitter
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from example_utils import setup_environment, print_section
 
 def main():
@@ -146,13 +146,13 @@ def main():
     # We bypass factory slightly to enforce path for demo, 
     # OR we can just use factory and rely on unique collection name.
     # Factory uses settings. let's instantiate Chroma directly to be safe and explicit for demo?
-    # Or strict adherence to library patterns. The library pattern is get_vector_store.
-    # Ideally we should use get_vector_store.
+    # Or strict adherence to library patterns. The canonical factory is create_vector_store.
+    # Ideally we should use create_vector_store.
     # But factory.py relies on checking settings or defaulting to ./chroma_db.
-    # Let's use get_vector_store but be aware it might mix. 
+    # Let's use create_vector_store but be aware it might mix. 
     # Actually, we can just use a unique collection name.
     
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=COLLECTION_NAME

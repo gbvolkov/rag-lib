@@ -19,6 +19,7 @@ def test_csv_table_splitter_rows_per_chunk():
     assert segments[0].metadata["data_row_end"] == 2
     assert segments[0].metadata["data_row_count"] == 2
     assert segments[0].metadata["table_chunk_total"] == 2
+    assert segments[0].metadata["output_format"] == "csv"
     assert segments[1].metadata["data_row_start"] == 2
     assert segments[1].metadata["data_row_end"] == 3
     assert segments[1].metadata["data_row_count"] == 1
@@ -67,3 +68,40 @@ def test_csv_table_splitter_summary_metadata_and_content_injection():
     assert segments[0].metadata["table_summary"] == segments[1].metadata["table_summary"]
     assert segments[0].content.startswith("Table Summary:\n")
     assert "\n\n---\n\n" in segments[0].content
+
+
+def test_csv_table_splitter_can_generate_column_headers():
+    text = "id,name\n1,A\n2,B"
+    splitter = CSVTableSplitter(
+        max_rows_per_chunk=10,
+        delimiter=",",
+        use_first_row_as_header=False,
+    )
+
+    segments = splitter.create_segments(text)
+
+    assert len(segments) == 1
+    lines = segments[0].content.splitlines()
+    assert lines[0] == "Column1,Column2"
+    assert lines[1] == "id,name"
+    assert lines[2] == "1,A"
+    assert lines[3] == "2,B"
+    assert segments[0].metadata["data_row_count"] == 3
+    assert segments[0].metadata["use_first_row_as_header"] is False
+
+
+def test_csv_table_splitter_header_only_kept_as_data_when_disabled():
+    text = "id,name\n"
+    splitter = CSVTableSplitter(
+        max_rows_per_chunk=10,
+        delimiter=",",
+        use_first_row_as_header=False,
+    )
+
+    segments = splitter.create_segments(text)
+
+    assert len(segments) == 1
+    lines = segments[0].content.splitlines()
+    assert lines[0] == "Column1,Column2"
+    assert lines[1] == "id,name"
+    assert segments[0].metadata["data_row_count"] == 1

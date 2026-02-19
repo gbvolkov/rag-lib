@@ -5,7 +5,7 @@ from example_utils import setup_environment, print_section
 
 # 1. Imports
 from rag_lib.retrieval.composition import create_dual_storage_retriever
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 from langchain_openai import OpenAIEmbeddings
 # Using InMemoryByteStore as the "Full Doc Store"
 from langchain_core.stores import InMemoryByteStore
@@ -43,7 +43,7 @@ def main():
     # 2. Setup Stores
     # Vector Store (for Summaries/Vectors)
     embeddings = OpenAIEmbeddings()
-    vector_store = get_vector_store("chroma", embeddings, "13_dual_storage")
+    vector_store = create_vector_store("chroma", embeddings, "13_dual_storage")
     
     # Byte Store (for Full Content)
     byte_store = InMemoryByteStore()
@@ -62,13 +62,13 @@ def main():
     # Add to ByteStore (pickled/stored)
     # ByteStore keys usually bytes or str, values bytes.
     # LangChain's create_dual_storage_retriever expects the store to hold Documents usually?
-    # Or uses MultiVectorRetriever logic which uses `docstore`.
+    # Or uses MultiVectorRetriever logic which uses an internal document store.
     
-    # Let's populate the docstore manually as MultiVectorRetriever would.
+    # Let's populate the document store manually as MultiVectorRetriever would.
     byte_store.mset([(doc_id, Document(page_content=full_content).json().encode('utf-8'))]) 
     
     # WAIT: create_dual_storage_retriever typically returns MultiVectorRetriever.
-    # MultiVectorRetriever uses a `docstore` (BaseStore[str, Document]). 
+    # MultiVectorRetriever uses an internal document store (BaseStore[str, Document]).
     # InMemoryByteStore stores bytes. We need a wrapper or use the correct store type.
     # For e2e simplicity, we'll use `InMemoryStore` if available or just mocking the flow 
     # if `create_dual_storage_retriever` handles the storage logic.
@@ -78,8 +78,8 @@ def main():
     
     print("Indexing Dual Content (Summary -> Vector, Full -> Store)...")
     # For this E2E, we'll use the helper to CREATE the retriever, but populating 
-    # the underlying stores usually happens via `MultiVectorRetriever.vectorstore.add_documents` 
-    # and `docstore.mset`. 
+    # the underlying stores usually happens via `MultiVectorRetriever.add_documents(...)`
+    # and document store `mset(...)`.
     
     # Let's try to simulate retrieval assuming it's populated.
     # ... (Actual population code typically complex, let's skip deep implementation of MultiVector population and just show retrieval setup)
@@ -94,7 +94,7 @@ def main():
     
     retriever = create_dual_storage_retriever(
         vector_store=vector_store,
-        docstore=byte_store, # Pass raw store, internal logic handles encoding hopefully?
+        doc_store=byte_store, # Pass raw store, internal logic handles encoding hopefully?
         id_key="doc_id"
     )
     

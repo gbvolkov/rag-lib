@@ -137,8 +137,8 @@ The bridge to your Vector Database.
 
 | Class/Factory                    | Import Path                          | Description                                                                                                        |
 | :------------------------------- | :----------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
-| **`get_vector_retriever`**       | `rag_lib.retrieval.retrievers`       | Standard dense vector retrieval (Similarity, MMR, Score Threshold).                                                |
-| **`get_bm25_retriever`**         | `rag_lib.retrieval.retrievers`       | **BM25** (Sparse) retrieval for keyword matching. (In-memory).                                                     |
+| **`create_vector_retriever`**    | `rag_lib.retrieval.retrievers`       | Standard dense vector retrieval (Similarity, MMR, Score Threshold).                                                |
+| **`create_bm25_retriever`**      | `rag_lib.retrieval.retrievers`       | **BM25** (Sparse) retrieval for keyword matching. (In-memory).                                                     |
 | **`RegexRetriever`**             | `rag_lib.retrieval.retrievers`       | Finds documents matching a specific **Regex Pattern** (good for IDs/Codes).                                        |
 | **`FuzzyRetriever`**             | `rag_lib.retrieval.retrievers`       | Uses **Levenshtein Distance** (RapidFuzz) for fuzzy string matching.                                               |
 | **`ScoredMultiVectorRetriever`** | `rag_lib.retrieval.scored_retriever` | Multi-Vector Retriever that aggregates similarity scores (MAX) from chunks to parents. Supports `score_threshold`. |
@@ -360,17 +360,17 @@ Each returned `Document` includes:
 
 ```python
 from langchain_openai import ChatOpenAI
-from rag_lib.embeddings.factory import get_embeddings_model
+from rag_lib.embeddings.factory import create_embeddings_model
 from rag_lib.graph.store import NetworkXGraphStore
 from rag_lib.processors.entity_extractor import EntityExtractor
 from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 # 1. Setup
 store = NetworkXGraphStore()
 extractor = EntityExtractor(llm=my_llm, store=store)
-embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
-vector_store = get_vector_store(
+embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+vector_store = create_vector_store(
     provider="chroma",
     embeddings=embeddings,
     collection_name="graph_demo",

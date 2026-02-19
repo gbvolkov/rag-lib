@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 from rag_lib.retrieval.retrievers import (
     RegexRetriever, 
     FuzzyRetriever, 
-    get_vector_retriever, 
-    get_bm25_retriever
+    create_vector_retriever, 
+    create_bm25_retriever,
 )
 
 # Test Data
@@ -52,12 +52,13 @@ def test_vector_retriever_factory():
     mock_store = MagicMock()
     mock_store.as_retriever.return_value = "MockRetriever"
     
-    retriever = get_vector_retriever(mock_store, k=10)
+    retriever = create_vector_retriever(mock_store, top_k=10)
     assert retriever == "MockRetriever"
     mock_store.as_retriever.assert_called_with(
         search_type="similarity",
         search_kwargs={"k": 10}
     )
+
 
 def test_bm25_retriever_factory():
     # BM25 requires rank_bm25 package
@@ -66,7 +67,8 @@ def test_bm25_retriever_factory():
     except ImportError:
         pytest.skip("rank_bm25 not installed")
         
-    retriever = get_bm25_retriever(DOCS, k=2)
+    retriever = create_bm25_retriever(DOCS, top_k=2)
     results = retriever.invoke("Apple")
     assert len(results) > 0
     assert "Apple" in results[0].page_content or "Appel" in results[0].page_content
+

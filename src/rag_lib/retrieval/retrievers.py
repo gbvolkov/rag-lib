@@ -103,16 +103,16 @@ class FuzzyRetriever(BaseRetriever):
             
         return results
 
-def get_vector_retriever(
+def create_vector_retriever(
     vector_store: VectorStore, 
-    k: int = 4,
+    top_k: int = 4,
     search_type: str = "similarity", # "similarity", "mmr", "similarity_score_threshold"
-    score_threshold: Optional[float] = None
+    score_threshold: Optional[float] = None,
 ) -> BaseRetriever:
     """
     Factory validation for standard Vector Retriever.
     """
-    kwargs = {"k": k}
+    kwargs = {"k": top_k}
     if score_threshold is not None:
         kwargs["score_threshold"] = score_threshold
         
@@ -121,9 +121,9 @@ def get_vector_retriever(
         search_kwargs=kwargs
     )
 
-def get_bm25_retriever(
+def create_bm25_retriever(
     documents: List[Union[Document, Segment]],
-    k: int = 4
+    top_k: int = 4,
 ) -> BM25Retriever:
     """
     Factory for BM25 Retriever (In-Memory).
@@ -137,9 +137,9 @@ def get_bm25_retriever(
         else:
             lc_docs.append(doc)
             
-    return BM25Retriever.from_documents(lc_docs, k=k)
+    return BM25Retriever.from_documents(lc_docs, k=top_k)
 
-def get_graph_retriever(
+def create_graph_retriever(
     vector_store: Optional[VectorStore],
     graph_store: Any,  # BaseGraphStore
     config: Optional[Any] = None,  # GraphQueryConfig

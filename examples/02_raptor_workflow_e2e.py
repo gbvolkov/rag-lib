@@ -34,7 +34,7 @@ from rag_lib.core.domain import Segment, SegmentType
 from rag_lib.processors.raptor import RaptorProcessor
 from rag_lib.chunkers.semantic import SemanticChunker # Used for initial split before RAPTOR
 from rag_lib.core.indexer import Indexer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 def main():
     setup_environment()
@@ -145,7 +145,7 @@ def main():
         shutil.rmtree(demo_db_path)
 
     print(f"Initializing Vector Store: {COLLECTION_NAME}")
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=COLLECTION_NAME

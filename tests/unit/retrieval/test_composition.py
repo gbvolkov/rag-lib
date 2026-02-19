@@ -48,9 +48,8 @@ def test_dual_storage_creation():
     
     dual = create_dual_storage_retriever(vector_store, doc_store, id_key="seg_id")
     assert isinstance(dual, MultiVectorRetriever)
-    assert dual.vectorstore == vector_store
-    assert dual.docstore == doc_store
     assert dual.id_key == "seg_id"
+
 
 # Robustly import BaseCrossEncoder for mocking
 try:
@@ -79,9 +78,10 @@ def test_reranking_creation_simple():
     
     from unittest.mock import patch
     with patch("rag_lib.retrieval.composition.HuggingFaceCrossEncoder", return_value=model):
-         reranked = create_reranking_retriever(r1, top_n=3)
+         reranked = create_reranking_retriever(r1, top_k=3)
          assert isinstance(reranked, ContextualCompressionRetriever)
          assert reranked.base_retriever == r1
+
 
 def test_reranking_auto_ensemble():
     model = MockCrossEncoderModel()

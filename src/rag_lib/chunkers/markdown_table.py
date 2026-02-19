@@ -17,13 +17,16 @@ class MarkdownTableSplitter(TextSplitter):
     """
     Splits text into Table Segments and Text Segments based on Markdown GFM table syntax.
     Inherits from TextSplitter to support standardized pipeline.
+    Header handling is configurable via `use_first_row_as_header`.
+    Canonical size parameters are `max_rows_per_chunk` and `max_chunk_size`.
     """
     def __init__(
         self,
         *,
         split_table_rows: bool = False,
-        max_rows_per_table_chunk: Optional[int] = None,
-        max_table_chunk_size: Optional[int] = None,
+        use_first_row_as_header: bool = True,
+        max_rows_per_chunk: Optional[int] = None,
+        max_chunk_size: Optional[int] = None,
         summarizer: Optional[TableSummarizer] = None,
         summarize_table: bool = True,
         summarize_chunks: bool = False,
@@ -32,14 +35,15 @@ class MarkdownTableSplitter(TextSplitter):
         settings = Settings()
         resolved_rows_per_chunk = (
             settings.ingestion.chunk_size
-            if max_rows_per_table_chunk is None
-            else max_rows_per_table_chunk
+            if max_rows_per_chunk is None
+            else max_rows_per_chunk
         )
 
         super().__init__(chunk_size=resolved_rows_per_chunk, chunk_overlap=0)
         self.split_table_rows = split_table_rows
-        self.max_rows_per_table_chunk = resolved_rows_per_chunk
-        self.max_table_chunk_size = max_table_chunk_size
+        self.use_first_row_as_header = use_first_row_as_header
+        self.max_rows_per_chunk = resolved_rows_per_chunk
+        self.max_chunk_size = max_chunk_size
         self.summarizer = summarizer
         self.summarize_table = summarize_table
         self.summarize_chunks = summarize_chunks
@@ -78,6 +82,7 @@ class MarkdownTableSplitter(TextSplitter):
         final_segments = []
         process_table_segments = (
             self.split_table_rows
+            or not self.use_first_row_as_header
             or self.inject_summaries_into_content
             or (self.summarizer is not None and (self.summarize_table or self.summarize_chunks))
         )
@@ -176,7 +181,14 @@ class MarkdownTableSplitter(TextSplitter):
         metadata: Optional[Dict[str, Any]],
     ) -> List[Segment]:
         meta_base = metadata.copy() if metadata else {}
-        parsed_table = parse_markdown_table(table_content)
+        parsed_table = parse_markdown_table(
+            table_content,
+            use_first_row_as_header=self.use_first_row_as_header,
+        )
+        if not parsed_table.header:
+            return []
+
+        normalized_table_content = render_markdown_table(parsed_table.header, parsed_table.rows)
 
         if self.split_table_rows and parsed_table.header:
             if not parsed_table.rows:
@@ -184,15 +196,15 @@ class MarkdownTableSplitter(TextSplitter):
                 return []
 
             table_summary = self._summarize_markdown(
-                render_markdown_table(parsed_table.header, parsed_table.rows),
+                normalized_table_content,
                 summary_level="table",
             )
             row_chunks = chunk_table_rows(
                 header=parsed_table.header,
                 rows=parsed_table.rows,
                 render_chunk=render_markdown_table,
-                max_rows_per_chunk=self.max_rows_per_table_chunk,
-                max_chunk_size=self.max_table_chunk_size,
+                max_rows_per_chunk=self.max_rows_per_chunk,
+                max_chunk_size=self.max_chunk_size,
                 length_function=self._length_function,
             )
 
@@ -216,13 +228,14 @@ class MarkdownTableSplitter(TextSplitter):
                 meta_table.update(
                     {
                         "is_table": True,
-                        "table_format": "markdown",
+                        "output_format": "markdown",
                         "split_strategy": self.__class__.__name__,
                         "table_chunk_index": table_chunk_index,
                         "table_chunk_total": total_chunks,
                         "data_row_start": row_chunk.data_row_start,
                         "data_row_end": row_chunk.data_row_end,
                         "data_row_count": len(row_chunk.rows),
+                        "use_first_row_as_header": self.use_first_row_as_header,
                     }
                 )
                 if table_summary:
@@ -244,13 +257,16 @@ class MarkdownTableSplitter(TextSplitter):
             return split_segments
 
         # Default mode: keep full table block as one segment and optionally summarize/inject.
-        table_summary = self._summarize_markdown(table_content, summary_level="table")
-        chunk_summary = self._summarize_markdown(table_content, summary_level="chunk")
+        table_content_for_output = (
+            table_content if self.use_first_row_as_header else normalized_table_content
+        )
+        table_summary = self._summarize_markdown(table_content_for_output, summary_level="table")
+        chunk_summary = self._summarize_markdown(table_content_for_output, summary_level="chunk")
 
-        final_content = table_content
+        final_content = table_content_for_output
         if self.inject_summaries_into_content:
             final_content = build_summary_content(
-                table_content,
+                table_content_for_output,
                 table_summary=table_summary,
                 chunk_summary=chunk_summary,
             )
@@ -259,10 +275,11 @@ class MarkdownTableSplitter(TextSplitter):
         meta_table.update(
             {
                 "is_table": True,
-                "table_format": "markdown",
+                "output_format": "markdown",
                 "split_strategy": self.__class__.__name__,
                 "table_chunk_index": 0,
                 "table_chunk_total": 1,
+                "use_first_row_as_header": self.use_first_row_as_header,
             }
         )
 
@@ -276,7 +293,7 @@ class MarkdownTableSplitter(TextSplitter):
         if chunk_summary:
             meta_table["chunk_summary"] = chunk_summary
         if self.inject_summaries_into_content:
-            meta_table["original_content"] = table_content
+            meta_table["original_content"] = table_content_for_output
 
         return [
             Segment(

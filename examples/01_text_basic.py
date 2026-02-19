@@ -20,7 +20,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 from rag_lib.retrieval.retrievers import FuzzyRetriever
 from rag_lib.core.indexer import Indexer
-# from rag_lib.vectors.factory import get_vector_store # This will be replaced
+# from rag_lib.vectors.factory import create_vector_store # This will be replaced
 
 """
 E2E Example 01: Basic Text Workflow
@@ -70,8 +70,8 @@ import json
 
 # Mock or real imports for vector store (depending on environment)
 # Strict import - will fail if dependencies are missing
-from rag_lib.vectors.factory import get_vector_store
-from rag_lib.retrieval.retrievers import get_vector_retriever
+from rag_lib.vectors.factory import create_vector_store
+from rag_lib.retrieval.retrievers import create_vector_retriever
 
 def main():
     # 1. Setup
@@ -120,14 +120,14 @@ def main():
     # 6. Index & Retrieve
     print("Indexing chunks and setting up Dual Storage...")
 
-    from rag_lib.embeddings.factory import get_embeddings_model
-    from rag_lib.vectors.factory import get_vector_store
+    from rag_lib.embeddings.factory import create_embeddings_model
+    from rag_lib.vectors.factory import create_vector_store
     
     # Imports for Dual Storage
     from rag_lib.retrieval.composition import create_scored_dual_storage_retriever
     from langchain_core.stores import InMemoryStore
     
-    embeddings = get_embeddings_model(provider="openai")
+    embeddings = create_embeddings_model(provider="openai")
     
     # CLEANUP: Remove old vector store to prevent stale IDs
     if os.path.exists("./chroma_db"):
@@ -135,7 +135,7 @@ def main():
         print("Cleaned up existing ./chroma_db")
 
     # A. Vector Store: Index the CHUNKS (Small)
-    vector_store = get_vector_store(embeddings=embeddings)
+    vector_store = create_vector_store(embeddings=embeddings)
     print(f"Vector store initialized: {type(vector_store).__name__}")
     
     # B. Doc Store: Store the PARENTS (Big)
@@ -146,7 +146,7 @@ def main():
     
     # Index Chunks (Vector) AND Parents (DocStore) in one go
     # "Small-to-Big": Search 'final_segments' (chunks), Retrieve 'logical_segments' (parents)
-    indexer.index(final_segments, parents=logical_segments)
+    indexer.index(final_segments, parent_segments=logical_segments)
     
     # 7. Retrieval (Small-to-Big)
     # Note: Source text uses Cyrillic 'С' in '1С:CRM', so we must match it or rely on strong embedding alignment.
@@ -157,7 +157,7 @@ def main():
     # Matches Chunk in VectorStore -> Uses 'parent_id' from Chunk -> Retrieves Parent from DocStore
     retriever = create_scored_dual_storage_retriever(
         vector_store=vector_store,
-        docstore=doc_store,
+        doc_store=doc_store,
         id_key="parent_id",
         search_kwargs={"k": 10},
         search_type="similarity_score_threshold",

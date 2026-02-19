@@ -42,7 +42,7 @@ def test_verify_pdf_tables():
     # Attempt load
     try:
         path = os.path.join(DATA_DIR, "test_tables.pdf")
-        loader = PDFLoader(path, mode="table")
+        loader = PDFLoader(path, parse_mode="table")
         tables = loader.load()
         if not tables:
             pytest.skip("No PDF tables extracted in current environment")

@@ -1,40 +1,32 @@
-import inspect
-import sys
-try:
-    from langchain.retrievers.multi_vector import MultiVectorRetriever
-except ImportError:
-    try:
-        from langchain.retrievers import MultiVectorRetriever
-        print("Imported MultiVectorRetriever from langchain (standard)")
-    except ImportError:
-        try:
-            from langchain.retrievers.multi_vector import MultiVectorRetriever
-            print("Imported MultiVectorRetriever from langchain.retrievers.multi_vector")
-        except ImportError:
-            print("Could not import MultiVectorRetriever")
-            sys.exit(1)
+from langchain_core.documents import Document
+from langchain_core.stores import InMemoryStore
+from langchain_core.vectorstores import VectorStore
 
-try:
-    from langchain.retrievers.multi_vector import MultiVectorRetriever
-    print("Imported MultiVectorRetriever from langchain.retrievers.multi_vector")
-    try:
-         print("Fields:", MultiVectorRetriever.model_fields.keys())
-    except:
-         print("No model_fields using dir:", dir(MultiVectorRetriever))
-         
-    # Try instantiation
-    try:
-        MultiVectorRetriever(vectorstore=MockVectorStore(), byte_store=MockStore())
-        print("SUCCESS: byte_store accepted")
-    except TypeError as e:
-        print(f"FAILED: byte_store - {e}")
+from rag_lib.retrieval.scored_retriever import ScoredMultiVectorRetriever
 
-    try:
-        # Check alias?
-        MultiVectorRetriever(vectorstore=MockVectorStore(), docstore=MockStore())
-        print("SUCCESS: docstore accepted")
-    except TypeError as e:
-        print(f"FAILED: docstore - {e}")
 
-except ImportError:
-    print("Could not import MultiVectorRetriever from anywhere")
+class MockVectorStore(VectorStore):
+    @classmethod
+    def from_texts(cls, texts, embedding, metadatas=None, **kwargs):
+        return cls()
+
+    def add_texts(self, texts, metadatas=None, **kwargs):
+        return []
+
+    def similarity_search(self, query, k=4, **kwargs):
+        return []
+
+    @property
+    def embeddings(self):
+        return None
+
+
+if __name__ == "__main__":
+    print("ScoredMultiVectorRetriever fields:", ScoredMultiVectorRetriever.model_fields.keys())
+
+    retriever = ScoredMultiVectorRetriever(
+        vector_store=MockVectorStore(),
+        doc_store=InMemoryStore(),
+        id_key="doc_id",
+    )
+    print("Created retriever with canonical names:", isinstance(retriever, ScoredMultiVectorRetriever))

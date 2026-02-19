@@ -19,7 +19,7 @@ def test_csv_standard():
     docs = loader.load()
     
     assert len(docs) > 0
-    assert docs[0].metadata["table_format"] == "markdown"
+    assert docs[0].metadata["output_format"] == "markdown"
     assert "Item 0" in docs[0].page_content
     assert docs[0].metadata["source"] == path
 
@@ -85,7 +85,7 @@ def test_pdf_backend_selection():
 
     # Patch the global variable 'camelot' in the pdf module
     with patch("rag_lib.loaders.pdf.camelot", mock_camelot):
-        loader = PDFLoader("dummy.pdf", backend="lattice")
+        loader = PDFLoader("dummy.pdf", parse_mode="table", backend="lattice")
         loader.load()
         
         mock_camelot.read_pdf.assert_called_with("dummy.pdf", pages='all', backend='lattice')
@@ -97,7 +97,7 @@ def test_pdf_corrupt_file():
     mock_camelot.read_pdf.side_effect = Exception("PDF file is damaged")
     
     with patch("rag_lib.loaders.pdf.camelot", mock_camelot):
-        loader = PDFLoader(path)
+        loader = PDFLoader(path, parse_mode="table")
         with pytest.raises(RuntimeError) as exc:
             loader.load()
         assert "Camelot extraction failed" in str(exc.value)
@@ -107,7 +107,7 @@ def test_pdf_missing_poppler_hint():
     mock_camelot.read_pdf.side_effect = Exception("poppler is not installed or not in PATH")
     
     with patch("rag_lib.loaders.pdf.camelot", mock_camelot):
-        loader = PDFLoader("dummy.pdf", backend="poppler")
+        loader = PDFLoader("dummy.pdf", parse_mode="table", backend="poppler")
         
         with pytest.raises(RuntimeError) as exc:
             loader.load()

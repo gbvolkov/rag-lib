@@ -33,6 +33,7 @@ def test_extract_markdown_table_from_text():
     assert "| Item | Price |" in segments[1].content
     assert "| Apple | $1 |" in segments[1].content
     assert segments[1].original_format == "markdown"
+    assert segments[1].metadata["output_format"] == "markdown"
     
     assert segments[2].type == SegmentType.TEXT
     assert "End of list" in segments[2].content
@@ -102,7 +103,7 @@ def test_row_split_mode_with_table_and_chunk_summaries():
     """
     splitter = MarkdownTableSplitter(
         split_table_rows=True,
-        max_rows_per_table_chunk=2,
+        max_rows_per_chunk=2,
         summarizer=MockSummarizer(),
         summarize_table=True,
         summarize_chunks=True,
@@ -128,7 +129,7 @@ def test_row_split_mode_with_summary_injection():
     """
     splitter = MarkdownTableSplitter(
         split_table_rows=True,
-        max_rows_per_table_chunk=1,
+        max_rows_per_chunk=1,
         summarizer=MockSummarizer(),
         summarize_table=True,
         summarize_chunks=True,
@@ -157,7 +158,7 @@ def test_row_split_mode_keeps_text_around_tables():
     """
     splitter = MarkdownTableSplitter(
         split_table_rows=True,
-        max_rows_per_table_chunk=2,
+        max_rows_per_chunk=2,
     )
 
     segments = splitter.create_segments(content)
@@ -168,3 +169,44 @@ def test_row_split_mode_keeps_text_around_tables():
     assert "Outro text." in segments[-1].content
     table_segs = [s for s in segments if s.type == SegmentType.TABLE]
     assert len(table_segs) == 2
+
+
+def test_markdown_table_splitter_can_generate_column_headers_without_row_split():
+    content = """
+    | ID | Value |
+    |---|---|
+    | 1 | A |
+    | 2 | B |
+    """
+    splitter = MarkdownTableSplitter(use_first_row_as_header=False)
+
+    segments = splitter.create_segments(content)
+    table_seg = [s for s in segments if s.type == SegmentType.TABLE][0]
+
+    assert "| Column1 | Column2 |" in table_seg.content
+    assert "| ID | Value |" in table_seg.content
+    assert table_seg.metadata["use_first_row_as_header"] is False
+
+
+def test_markdown_table_splitter_can_generate_column_headers_with_row_split():
+    content = """
+    | ID | Value |
+    |---|---|
+    | 1 | A |
+    | 2 | B |
+    """
+    splitter = MarkdownTableSplitter(
+        split_table_rows=True,
+        max_rows_per_chunk=2,
+        use_first_row_as_header=False,
+    )
+
+    segments = splitter.create_segments(content)
+    table_segs = [s for s in segments if s.type == SegmentType.TABLE]
+
+    assert len(table_segs) == 2
+    assert "| Column1 | Column2 |" in table_segs[0].content
+    assert "| ID | Value |" in table_segs[0].content
+    assert table_segs[0].metadata["data_row_count"] == 2
+    assert table_segs[1].metadata["data_row_count"] == 1
+

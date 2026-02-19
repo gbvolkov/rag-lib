@@ -7,12 +7,12 @@ from example_utils import print_section, save_json_results, setup_environment
 
 from rag_lib.chunkers.csv_table import CSVTableSplitter
 from rag_lib.core.indexer import Indexer
-from rag_lib.embeddings.factory import get_embeddings_model
-from rag_lib.llm.factory import get_llm
+from rag_lib.embeddings.factory import create_embeddings_model
+from rag_lib.llm.factory import create_llm
 from rag_lib.loaders.csv_excel import CSVLoader
-from rag_lib.retrieval.retrievers import get_vector_retriever
+from rag_lib.retrieval.retrievers import create_vector_retriever
 from rag_lib.summarizers.table_llm import LLMTableSummarizer
-from rag_lib.vectors.factory import get_vector_store
+from rag_lib.vectors.factory import create_vector_store
 
 """
 E2E Example 07: CSV Table & Summary Workflow
@@ -54,7 +54,7 @@ def main() -> None:
     save_json_results(docs, "07_csv_table_summary", "loaded_documents")
 
     print_section("2. CSV Table Row Splitting + Summaries")
-    llm = get_llm(provider="openai", model="gpt-4.1-nano", temperature=0, streaming=False)
+    llm = create_llm(provider="openai", model_name="gpt-4.1-nano", temperature=0, streaming=False)
     summarizer = LLMTableSummarizer(llm=llm)
     splitter = CSVTableSplitter(
         max_rows_per_chunk=2,
@@ -79,9 +79,9 @@ def main() -> None:
     save_json_results(segments, "07_csv_table_summary", "segments")
 
     print_section("3. Indexing")
-    embeddings = get_embeddings_model(provider="openai", model_name="text-embedding-3-small")
+    embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     collection_name = f"07_csv_table_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    vector_store = get_vector_store(
+    vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
         collection_name=collection_name,
@@ -96,7 +96,7 @@ def main() -> None:
     print_section("4. Retrieval")
     query = "Продукт уровень 3 ТУРИСТИЧЕСКАЯ"
     print(f"Query: {query}")
-    retriever = get_vector_retriever(vector_store=vector_store, k=3)
+    retriever = create_vector_retriever(vector_store=vector_store, top_k=3)
     results = retriever.invoke(query)
     save_json_results(results, "07_csv_table_summary", "retrieved_results")
 

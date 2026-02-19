@@ -18,6 +18,7 @@ class CSVTableSplitter(TextSplitter):
     """
     Splits CSV table text into row-based table chunks.
     Each output chunk includes the header row plus one or more data rows.
+    Header handling is configurable via `use_first_row_as_header`.
     """
 
     def __init__(
@@ -25,6 +26,7 @@ class CSVTableSplitter(TextSplitter):
         max_rows_per_chunk: Optional[int] = None,
         max_chunk_size: Optional[int] = None,
         delimiter: Optional[str] = None,
+        use_first_row_as_header: bool = True,
         summarizer: Optional[TableSummarizer] = None,
         summarize_table: bool = True,
         summarize_chunks: bool = False,
@@ -33,13 +35,16 @@ class CSVTableSplitter(TextSplitter):
     ):
         settings = Settings()
         resolved_rows_per_chunk = (
-            settings.ingestion.chunk_size if max_rows_per_chunk is None else max_rows_per_chunk
+            settings.ingestion.chunk_size
+            if max_rows_per_chunk is None
+            else max_rows_per_chunk
         )
         super().__init__(chunk_size=resolved_rows_per_chunk, chunk_overlap=0, length_function=length_function)
 
         self.max_rows_per_chunk = resolved_rows_per_chunk
         self.max_chunk_size = max_chunk_size
         self.delimiter = delimiter
+        self.use_first_row_as_header = use_first_row_as_header
         self.summarizer = summarizer
         self.summarize_table = summarize_table
         self.summarize_chunks = summarize_chunks
@@ -51,7 +56,11 @@ class CSVTableSplitter(TextSplitter):
 
     def create_segments(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[Segment]:
         base_metadata = metadata.copy() if metadata else {}
-        parsed_table, delimiter = parse_csv_table(text, delimiter=self.delimiter)
+        parsed_table, delimiter = parse_csv_table(
+            text,
+            delimiter=self.delimiter,
+            use_first_row_as_header=self.use_first_row_as_header,
+        )
         if not parsed_table.header or not parsed_table.rows:
             return []
 
@@ -121,7 +130,7 @@ class CSVTableSplitter(TextSplitter):
             chunk_metadata.update(
                 {
                     "is_table": True,
-                    "table_format": "csv",
+                    "output_format": "csv",
                     "split_strategy": self.__class__.__name__,
                     "chunk_index": table_chunk_index,
                     "chunk_total": table_chunk_total,
@@ -131,6 +140,7 @@ class CSVTableSplitter(TextSplitter):
                     "data_row_end": row_chunk.data_row_end,
                     "data_row_count": len(row_chunk.rows),
                     "delimiter": delimiter,
+                    "use_first_row_as_header": self.use_first_row_as_header,
                 }
             )
 
