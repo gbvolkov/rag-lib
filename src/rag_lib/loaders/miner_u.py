@@ -204,6 +204,7 @@ class MinerULoader:
             )
 
         errors: List[Tuple[Sequence[str], str]] = []
+        timeout_seen = False
         for command in candidates:
             logger.debug(f"Trying MinerU command: {' '.join(command)}")
             try:
@@ -211,11 +212,13 @@ class MinerULoader:
                     command,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     check=True,
                     timeout=self.timeout_seconds,
                 )
-                self._last_cli_stdout = completed.stdout or ""
-                self._last_cli_stderr = completed.stderr or ""
+                self._last_cli_stdout = self._coerce_stream_text(completed.stdout)
+                self._last_cli_stderr = self._coerce_stream_text(completed.stderr)
 
                 if self._last_cli_stdout:
                     logger.debug(self._last_cli_stdout.strip())
@@ -228,14 +231,29 @@ class MinerULoader:
 
                 return command
             except subprocess.CalledProcessError as e:
-                self._last_cli_stdout = e.stdout or ""
-                self._last_cli_stderr = e.stderr or ""
+                self._last_cli_stdout = self._coerce_stream_text(e.stdout)
+                self._last_cli_stderr = self._coerce_stream_text(e.stderr)
                 errors.append((command, self._summarize_cli_output(self._last_cli_stdout, self._last_cli_stderr)))
             except subprocess.TimeoutExpired as e:
-                errors.append((command, f"timeout after {self.timeout_seconds}s: {e}"))
+                timeout_seen = True
+                self._last_cli_stdout = self._coerce_stream_text(e.stdout)
+                self._last_cli_stderr = self._coerce_stream_text(e.stderr)
+                details = self._summarize_cli_output(self._last_cli_stdout, self._last_cli_stderr)
+                errors.append(
+                    (
+                        command,
+                        f"timeout after {self.timeout_seconds}s: {e}\nCLI output tail:\n{details}",
+                    )
+                )
 
         error_lines = [f"{' '.join(cmd)} -> {err}" for cmd, err in errors]
         message = "Failed to parse PDF with MinerU. Tried commands:\n" + "\n".join(error_lines)
+        if timeout_seen:
+            message += (
+                "\nHint: MinerU may be slow on large PDFs. "
+                "Try setting start_page/end_page to a smaller range "
+                "(for example start_page=0, end_page=4) or increase timeout_seconds."
+            )
         proxy_hint = self._proxy_hint()
         if proxy_hint:
             message += "\n" + proxy_hint
@@ -292,3 +310,10 @@ class MinerULoader:
             + ", ".join(proxy_keys)
             + ". If proxy is unreachable, MinerU model download will fail."
         )
+
+    def _coerce_stream_text(self, value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return str(value)
