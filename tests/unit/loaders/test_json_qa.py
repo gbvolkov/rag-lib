@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from rag_lib.loaders.data_loaders import JsonLoader, QALoader
+from rag_lib.loaders.data_loaders import JsonLoader, TextLoader
 
 
 @pytest.fixture
@@ -37,8 +37,8 @@ def qa_file(tmp_path):
     return str(p)
 
 
-def test_qa_loader_returns_single_document(qa_file):
-    loader = QALoader(qa_file)
+def test_text_loader_returns_single_document(qa_file):
+    loader = TextLoader(qa_file)
     docs = loader.load()
     assert len(docs) == 1
     assert "Q: What is X?" in docs[0].page_content

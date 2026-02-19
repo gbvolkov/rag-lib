@@ -90,7 +90,7 @@ Responsible for ingesting raw files and producing standard **LangChain Documents
 | **`RegexHierarchyLoader`** | `rag_lib.loaders.regex`        | Splits plain text files using a recursive list of regex patterns (e.g., Log files, Configs).                 |
 | **`TableLoader`**          | `rag_lib.loaders.data_loaders` | Generic loader for structured tabular data (CSV/JSON). Supports "Row" mode (key-value text) or "Group" mode. |
 | **`JsonLoader`**           | `rag_lib.loaders.data_loaders` | Loads entire JSON file content into a single **Document**.                                                   |
-| **`QALoader`**             | `rag_lib.loaders.data_loaders` | Parses "Q: ... A: ..." formatted text files into QA segments.                                                |
+| **`TextLoader`**           | `rag_lib.loaders.data_loaders` | Loads plain text files into a single **Document**.                                                            |
 
 ### 4.2. Splitters & Chunkers (`rag_lib.chunkers`)
 

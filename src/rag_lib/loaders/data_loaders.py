@@ -211,18 +211,6 @@ class JsonLoader:
         except Exception:
             return []
 
-class QALoader:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-
-    def load(self) -> List[Document]:
-        try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return [Document(page_content=content, metadata={"source": self.file_path})]
-        except Exception:
-            return []
-
 class TextLoader:
     def __init__(self, file_path: str):
         self.file_path = file_path

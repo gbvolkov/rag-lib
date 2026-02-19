@@ -1,6 +1,6 @@
 import json
 
-from rag_lib.loaders.data_loaders import JsonLoader, QALoader, TableLoader
+from rag_lib.loaders.data_loaders import JsonLoader, TableLoader, TextLoader
 
 
 def test_complex_csv(tmp_path):
@@ -57,7 +57,7 @@ def test_noisy_qa(tmp_path):
     p = tmp_path / "noise.txt"
     p.write_text(content, encoding="utf-8")
 
-    loader = QALoader(str(p))
+    loader = TextLoader(str(p))
     docs = loader.load()
 
     assert len(docs) == 1
