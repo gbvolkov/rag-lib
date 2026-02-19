@@ -1,36 +1,22 @@
 # rag-lib Developer's Guide
 
-## 1. Overview
+This guide is aligned to the current code in `src/rag_lib`.
 
-`rag-lib` is a specialized Python library designed for **Advanced RAG (Retrieval-Augmented Generation)** pipelines. Unlike generic RAG tools, `rag-lib` focuses on **hierarchical segmentation** and **layout-aware parsing**, ensuring that complex documents (PDFs with tables, DOCX with strict headers, huge CSVs) are preserved as meaningful "Segments" rather than arbitrary text chunks.
+## 1. Version and Runtime
 
-### Key Philosophy: The "Segment"
+- Package name: `rag-lib`
+- Current project version (`pyproject.toml`): `0.2.1`
+- Supported Python: `>=3.12,<3.14`
 
-The atomic unit of `rag-lib` is the **Segment** (`rag_lib.core.domain.Segment`).
+To check installed package version:
 
-- **Not just text**: A Segment can be a `TABLE`, `IMAGE`, `AUDIO`, or `TEXT`.
-- **Hierarchy aware**: Every Segment knows its `parent_id`, `level` (depth), and `path` (breadcrumbs like ["Chapter 1", "Section 1.2"]).
-- **Metadata rich**: Segments carry extracted metadata (titles, keywords) and origin info.
-
----
+```bash
+python -c "import importlib.metadata as m; print(m.version('rag-lib'))"
+```
 
 ## 2. Installation
 
-### 2.1. Prerequisites
-
-- **Python**: Version 3.9 or higher.
-- **System Tools**:
-  - **Poppler**: Required for PDF parsing.
-    - _Windows_: Download binary, add `bin/` to PATH.
-    - _Linux_: `sudo apt-get install poppler-utils`
-    - _Mac_: `brew install poppler`
-  - **Ghostscript**: Required for `camelot-py` (Table extraction).
-    - _Windows_: Install from official site.
-    - _Linux_: `sudo apt-get install ghostscript`
-
-### 2.2. Install from Source
-
-Cloning the repository and installing in editable mode is recommended for development.
+### 2.1 Base install
 
 ```bash
 git clone https://github.com/your-org/rag-lib.git
@@ -38,257 +24,599 @@ cd rag-lib
 pip install -e .
 ```
 
-### 2.3. Install via Pip (Wheel)
+### 2.2 Optional extras
 
-If building a wheel:
+- `rag-lib[miner_u]`: MinerU / Magic-PDF integration
+- `rag-lib[graph]`: Neo4j graph backend support
+- `rag-lib[raptor]`: RAPTOR clustering dependencies
+- `rag-lib[pymupdf]`: PyMuPDF markdown/html loader support
+
+Example:
 
 ```bash
-pip install dist/rag_lib-0.1.0-py3-none-any.whl
+pip install -e ".[miner_u,graph,raptor,pymupdf]"
 ```
 
-### 2.4. Verify Installation
+## 3. Core Domain Models and Enums
 
-```bash
-python -c "import rag_lib; print(rag_lib.__version__)"
-```
-
----
-
-## 3. Architecture
-
-```mermaid
-graph TD
-    Input[Documents: PDF, DOCX, CSV] --> Loaders
-    Loaders -->|Documents| Splitters
-    Splitters -->|Segments| Chunkers
-    Chunkers -->|Refined Segments| Processors
-    Processors -->|Enriched Segments| Indexer
-    Indexer --> VectorStore[(Vector DB)]
-
-    subgraph "Core Components"
-    Loaders[Loaders: PDF, Structured, CSV]
-    Chunkers[Chunkers: Semantic, Regex, Markdown]
-    Processors[Enricher: LLM Metadata]
-    Indexer[Indexer: Parent-Child Retrieval]
-    end
-```
-
----
-
-## 4. Core Components
-
-### 4.1. Loaders (`rag_lib.loaders`)
-
-Responsible for ingesting raw files and producing standard **LangChain Documents**.
-
-| Class                      | Import Path                    | Description                                                                                                  |
-| :------------------------- | :----------------------------- | :----------------------------------------------------------------------------------------------------------- |
-| **`PDFLoader`**            | `rag_lib.loaders.pdf`          | Uses **Camelot** (lattice/stream) or **Poppler** to extract text and high-fidelity tables from PDFs.         |
-| **`DocXLoader`**           | `rag_lib.loaders.docx`         | Parses **DOCX** files into a single **Markdown** document, preserving headings/lists/links/tables.          |
-| **`CSVLoader`**            | `rag_lib.loaders.csv_excel`    | Loads **CSV** files. Detects delimiters automatically and converts rows to Markdown tables.                  |
-| **`ExcelLoader`**          | `rag_lib.loaders.csv_excel`    | Loads **Excel** files, treating each sheet as a segment.                                                     |
-| **`RegexHierarchyLoader`** | `rag_lib.loaders.regex`        | Splits plain text files using a recursive list of regex patterns (e.g., Log files, Configs).                 |
-| **`TableLoader`**          | `rag_lib.loaders.data_loaders` | Generic loader for structured tabular data (CSV/JSON). Supports "Row" mode (key-value text) or "Group" mode. |
-| **`JsonLoader`**           | `rag_lib.loaders.data_loaders` | Loads entire JSON file content into a single **Document**.                                                   |
-| **`TextLoader`**           | `rag_lib.loaders.data_loaders` | Loads plain text files into a single **Document**.                                                            |
-
-### 4.2. Splitters & Chunkers (`rag_lib.chunkers`)
-
-Refine raw Documents into Segments (Structure) or Segments into Chunks (Size).
-
-- **`split_documents(docs)`**: Converts Documents -> Segments (Logical Splitting).
-- **`split_segments(segs)`**: Converts Segments -> Chunks (Token/Character limitation).
-
-| Class                                | Import Path                        | Description                                                                                |
-| :----------------------------------- | :--------------------------------- | :----------------------------------------------------------------------------------------- |
-| **`JsonSplitter`**                   | `rag_lib.chunkers.json`            | Splits JSON content based on **jq-style** schema (e.g., extracting items from a list).     |
-| **`QASplitter`**                     | `rag_lib.chunkers.qa`              | Splits text containing "Q: ... A: ..." pairs into distinct Question/Answer segments.       |
-| **`RegexHierarchySplitter`**         | `rag_lib.chunkers.regex_hierarchy` | Splits text recursively using a list of regex patterns (e.g. Log levels, Config sections). |
-| **`SemanticChunker`**                | `rag_lib.chunkers.semantic`        | Splits text based on **cosine similarity** of sentence embeddings (detects topic shifts).  |
-| **`RecursiveCharacterTextSplitter`** | `rag_lib.chunkers.recursive`       | Standard recursive splitting (paragraphs -> sentences -> words) to fit chunk size.         |
-| **`TokenTextSplitter`**              | `rag_lib.chunkers.token`           | Splits text based on **token count** (using `tiktoken`) rather than characters.            |
-| **`SentenceSplitter`**               | `rag_lib.chunkers.sentence`        | Uses **NLTK** to split by true sentences, grouping them until chunk size is reached.       |
-| **`RegexSplitter`**                  | `rag_lib.chunkers.regex`           | Splits text based on a provided regex pattern.                                             |
-| **`MarkdownTableSplitter`**          | `rag_lib.chunkers.markdown_table`  | Extracts Markdown tables from text to ensure they remain intact as distinct segments.      |
-
-### 4.3. Processors (`rag_lib.processors`)
-
-Enhance segments with additional intelligence.
-
-| Class                 | Import Path                   | Description                                                                          |
-| :-------------------- | :---------------------------- | :----------------------------------------------------------------------------------- |
-| **`SegmentEnricher`** | `rag_lib.processors.enricher` | Uses an LLM to generate **Title**, **Keywords**, and a **Summary** for each segment. |
-
-### 4.4. Indexer (`rag_lib.core.indexer`)
-
-The bridge to your Vector Database.
-
-- **`Indexer`**: Implements **Parent-Child Indexing**.
-  - If a segment has a `summary` (from Enricher), it embeds the summary (Semantic Key) but stores the full content in the payload.
-  - Supports both `index()` (sync) and `aindex()` (async).
-
----
-
-## 5. Retrieval Components (`rag_lib.retrieval`)
-
-`rag-lib` provides advanced retrieval strategies beyond simple similarity search.
-
-### 5.1. Retrievers
-
-| Class/Factory                    | Import Path                          | Description                                                                                                        |
-| :------------------------------- | :----------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
-| **`create_vector_retriever`**    | `rag_lib.retrieval.retrievers`       | Standard dense vector retrieval (Similarity, MMR, Score Threshold).                                                |
-| **`create_bm25_retriever`**      | `rag_lib.retrieval.retrievers`       | **BM25** (Sparse) retrieval for keyword matching. (In-memory).                                                     |
-| **`RegexRetriever`**             | `rag_lib.retrieval.retrievers`       | Finds documents matching a specific **Regex Pattern** (good for IDs/Codes).                                        |
-| **`FuzzyRetriever`**             | `rag_lib.retrieval.retrievers`       | Uses **Levenshtein Distance** (RapidFuzz) for fuzzy string matching.                                               |
-| **`ScoredMultiVectorRetriever`** | `rag_lib.retrieval.scored_retriever` | Multi-Vector Retriever that aggregates similarity scores (MAX) from chunks to parents. Supports `score_threshold`. |
-
-### 5.2. Composition & Reranking
-
-Located in `rag_lib.retrieval.composition`.
-
-| Helper Function                            | Description                                                                                                                                       |
-| :----------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`create_ensemble_retriever`**            | Combines multiple retrievers (e.g., BM25 + Vector) using **Reciprocal Rank Fusion (RRF)**.                                                        |
-| **`create_reranking_retriever`**           | Wraps a retriever with a **Cross-Encoder** (e.g., BGE-Reranker) to re-score and filter the top-N results.                                         |
-| **`create_dual_storage_retriever`**        | Sets up a **Multi-Vector** system: Searches low-dim vectors/summaries, but retrieves full documents from a separate Store (e.g., Redis/Postgres). |
-| **`create_scored_dual_storage_retriever`** | Same as above, but returns `ScoredMultiVectorRetriever` which injects aggregated relevance scores into parent metadata.                           |
-
----
-
-## 6. Usage Examples
-
-### 6.1. Ingesting a Complex PDF with Tables
+### 3.1 `SegmentType` enum (`rag_lib.core.domain`)
 
 ```python
-from rag_lib.loaders.pdf import PDFLoader
-from rag_lib.summarizers.table_llm import LLMTableSummarizer
+SegmentType = {
+    "text",
+    "table",
+    "image",
+    "audio",
+    "code",
+    "other",
+}
+```
 
-# 1. Setup Table Summarizer (Optional)
-summarizer = LLMTableSummarizer(llm=my_langchain_llm)
+### 3.2 `Segment` model (`rag_lib.core.domain.Segment`)
 
-# 2. Load PDF
-    summarizer=summarizer
+Fields:
+
+- `content: str`
+- `metadata: Dict[str, Any] = {}`
+- `segment_id: Optional[str] = None`
+- `parent_id: Optional[str] = None`
+- `level: int = 0`
+- `path: List[str] = []`
+- `type: SegmentType = SegmentType.TEXT`
+- `original_format: str = "text"`
+
+Method:
+
+- `to_langchain() -> langchain_core.documents.Document`
+
+### 3.3 Top-level exports (`rag_lib.__init__`)
+
+`rag_lib` currently exports:
+
+- `Segment`
+- `Indexer`
+- `PDFLoader`
+- `PyMuPDFLoader`
+- `DocXLoader`
+- `SemanticChunker`
+- `SegmentEnricher`
+
+## 4. Loaders (`rag_lib.loaders`)
+
+All loaders return `List[langchain_core.documents.Document]`.
+
+### 4.1 Signatures and return behavior
+
+#### `PDFLoader` (`rag_lib.loaders.pdf`)
+
+```python
+PDFLoader(
+    file_path: str,
+    parse_mode: str = "text",          # "text" | "table"
+    summarizer: Optional[TableSummarizer] = None,
+    backend: Optional[str] = None,
 )
-
-docs = loader.load()
-
-# 3. Create Segments
-# Since each doc is a table (in table mode) or text, we can wrap them into Segments
-# or split them further.
-from rag_lib.chunkers.token import TokenTextSplitter
-splitter = TokenTextSplitter(chunk_size=1000)
-segments = splitter.split_documents(docs)
-
-# resulting 'segments' list contains typed Segments.
 ```
 
-### 6.2. Semantic Chunking & Indexing
+- `load()` in `text` mode returns one merged text `Document`.
+- `load()` in `table` mode returns one `Document` per extracted table.
+- Raises for invalid `parse_mode` or backend/dependency failures.
+
+#### `PyMuPDFLoader` (`rag_lib.loaders.pymupdf`)
 
 ```python
-from rag_lib.chunkers.semantic import SemanticChunker
-from rag_lib.processors.enricher import SegmentEnricher
-from rag_lib.core.indexer import Indexer
-
-# 1. Chunk Text Semantically
-chunker = SemanticChunker(embeddings=my_embeddings, threshold=0.75)
-text_segments = chunker.create_segments(raw_text) # Returns list of Segments
-
-# 2. Enrich Segments (Generate Titles/Keywords)
-enricher = SegmentEnricher(llm=my_chat_model)
-idx = Indexer(vector_store=my_vector_store, embeddings=my_embeddings, enricher=enricher)
-
-# 3. Index (Enrichment happens automatically inside indexer)
-idx.index(text_segments, batch_size=50)
+PyMuPDFLoader(file_path: str, output_format: str = "markdown")  # "markdown" | "html"
 ```
 
-### 6.3. Hierarchical DOCX Parsing
+- Returns one `Document`.
+- Metadata includes `parser`, `output_format`, optional `page_count`.
+- Raises `ValueError` for invalid format and runtime errors for extraction failures.
+
+#### `DocXLoader` (`rag_lib.loaders.docx`)
 
 ```python
-from rag_lib.loaders.docx import DocXLoader
-from rag_lib.chunkers.markdown_hierarchy import MarkdownHierarchySplitter
-
-# Define Regex Patterns for custom sections (optional)
-patterns = [
-    {"level": 2, "pattern": r"^Article \d+"}, # Treat "Article X" as Level 2 functionality
-]
-
-loader = DocXLoader("contract.docx") # Regex patterns now applied in Splitter if using RegexHierarchySplitter
-docs = loader.load()
-
-# Split by Hierarchy
-# Use MarkdownHierarchySplitter to parse the headers from the loaded Markdown
-splitter = MarkdownHierarchySplitter()
-segments = splitter.split_documents(docs)
-
-# Inspect hierarchy
-for seg in segments:
-    print(f"[{seg.level}] {seg.path} -> {seg.content[:30]}...")
+DocXLoader(file_path: str)
 ```
 
----
+- Converts DOCX to markdown.
+- Returns one `Document` on success, `[]` on failures.
+- Metadata includes `source_type="docx"`, `output_format="markdown"`.
 
-## 7. Configuration & Dependencies
+#### `CSVLoader` (`rag_lib.loaders.csv_excel`)
 
-`rag-lib` relies on `rag_lib.config.Settings` (Pydantic) for global defaults:
+```python
+CSVLoader(
+    file_path: str,
+    output_format: Literal["markdown", "csv"] = "markdown",
+    delimiter: Optional[str] = None,
+)
+```
 
-- `ingestion.chunk_size`: Default CSV chunk size.
-- `ingestion.semantic_threshold`: Default similarity threshold.
-- `logging.level`: Global log level (INFO/DEBUG).
+- Returns one `Document`.
+- Auto-detects delimiter when omitted.
+- Metadata includes `row_count`, `delimiter`, `output_format`.
 
-**Key Dependencies**:
+#### `ExcelLoader` (`rag_lib.loaders.csv_excel`)
 
-- `camelot-py[cv]`: PDF Table extraction.
-- `langchain-core`: Abstractions for LLMs and Embeddings.
-- `pandas`: DataFrame operations.
-- `nltk`: Sentence tokenization.
+```python
+ExcelLoader(
+    file_path: str,
+    output_format: Literal["markdown", "csv"] = "markdown",
+    delimiter: str = ",",
+    summarizer: Optional[TableSummarizer] = None,
+)
+```
 
-## 8. Extending the Library
+- Returns one `Document` per sheet.
+- Metadata includes `sheet_name`, `row_count`, `output_format`.
 
-To add a new Loader:
+#### `RegexHierarchyLoader` (`rag_lib.loaders.regex`)
 
-1.  Create `src/rag_lib/loaders/my_loader.py`.
-2.  Implement a class with a `load(self) -> List[Segment]` method.
-3.  Ensure you generate standard `Segment` objects with `uuid` and `type`.
+```python
+RegexHierarchyLoader(
+    file_path: str,
+    patterns: Union[List[Tuple[int, str]], List[Dict]],
+    exclude_patterns: Optional[List[str]] = None,
+    include_parent_content: Union[bool, int] = False,
+)
+```
 
-To add a new Chunker:
+- Current behavior: loader returns raw file text as a single `Document`.
+- Hierarchical splitting is done by `RegexHierarchySplitter`, not this loader.
 
-1.  Inherit from `rag_lib.chunkers.base.TextSplitter` (if text-based).
-2.  Implement `split_text(self, text: str) -> List[str]`.
+#### `TableLoader` (`rag_lib.loaders.data_loaders`)
 
----
+```python
+TableLoader(file_path: str)
+```
 
-## 9. Graph RAG Extensions
+- Reads CSV-like data and renders one markdown table `Document`.
+- Returns `[]` on failures.
 
-`rag-lib` 0.2.0+ introduces **Graph RAG** capabilities, inspired by _LightRAG_. This allows for entity-centric retrieval and global summarization.
+#### `JsonLoader` (`rag_lib.loaders.data_loaders`)
 
-### 9.1. Components (`rag_lib.graph`)
+```python
+JsonLoader(
+    file_path: str,
+    output_format: Literal["json", "markdown"] = "json",
+    schema: str = ".",
+    schema_dialect: SchemaDialect = SchemaDialect.DOT_PATH,
+    ensure_ascii: bool = False,
+)
+```
 
-| Component                     | Description                                                            |
-| :---------------------------- | :--------------------------------------------------------------------- |
-| **`GraphNode` / `GraphEdge`** | Domain models for graph entities and relationships.                    |
-| **`NetworkXGraphStore`**      | In-memory graph storage (default). Good for prototyping.               |
-| **`Neo4jGraphStore`**         | Persistent graph storage adapter for Neo4j. Requires `rag-lib[graph]`. |
+- Supports schema selection with dot-path traversal.
+- Returns one `Document` or `[]` when path cannot be resolved / parsing fails.
 
-### 9.2. Processors
+#### `TextLoader` (`rag_lib.loaders.data_loaders`)
 
-| Component                 | Description                                                                                                                               |
-| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| **`EntityExtractor`**     | LLM-based processor that extracts Entities and Relations from Segments and populates the GraphStore. Supports **Async Batch Processing**. |
-| **`CommunityDetector`**   | Identifies communities (clusters) of nodes in the graph using modularity algorithms.                                                      |
-| **`CommunitySummarizer`** | Generates high-level summaries for each detected community.                                                                               |
+```python
+TextLoader(file_path: str)
+```
 
-### 9.3. Retrieval
+- Returns one plain text `Document` or `[]` on failure.
 
-`GraphRetriever` is strict and deterministic in this codebase (no silent fallbacks for missing capabilities).
+#### `MinerULoader` (`rag_lib.loaders.miner_u`)
 
-**Constructor (current API):**
+```python
+MinerULoader(
+    file_path: str,
+    parse_mode: str = "auto",          # "auto" | "txt" | "ocr"
+    backend: Optional[str] = None,      # see enum below
+    lang: Optional[str] = None,
+    server_url: Optional[str] = None,
+    start_page: Optional[int] = None,
+    end_page: Optional[int] = None,
+    parse_formula: Optional[bool] = None,
+    parse_table: Optional[bool] = None,
+    device: Optional[str] = None,
+    vram: Optional[int] = None,
+    source: Optional[str] = None,       # "huggingface" | "modelscope" | "local"
+    timeout_seconds: int = 600,
+    keep_temp_artifacts: bool = False,
+)
+```
+
+- Returns one markdown `Document` per PDF.
+- Validates parameter ranges and enum-like values.
+- Raises `ImportError` if MinerU is unavailable.
+
+### 4.2 Loader enums
+
+#### `SchemaDialect` (`rag_lib.loaders.data_loaders`)
+
+```python
+SchemaDialect = {"dot_path"}
+```
+
+## 5. Chunkers and Splitters (`rag_lib.chunkers`)
+
+### 5.1 Base contract
+
+`TextSplitter` base class exposes:
+
+- `split_text(text: str) -> List[str]`
+- `create_segments(text: str, metadata: Optional[Dict[str, Any]] = None) -> List[Segment]`
+- `split_documents(documents: Iterable[Document]) -> List[Segment]`
+- `split_segments(segments: Iterable[Segment]) -> List[Segment]`
+
+### 5.2 Concrete classes and parameter signatures
+
+#### `SemanticChunker`
+
+```python
+SemanticChunker(
+    embeddings: Embeddings,
+    threshold: Optional[float] = None,
+    window_size: int = 1,
+    language: str = "auto",
+    threshold_type: str = "fixed",          # "fixed" | "percentile" | "percentile_local"
+    percentile_threshold: int = 90,
+    local_percentile_window: int = 50,
+    local_min_samples: int = 20,
+    local_fallback: str = "global",         # "global" | "fixed"
+    enable_debug: bool = False,
+)
+```
+
+- Adds debug accessors: `get_last_debug_info()` and `get_split_boundary_for_chunk(...)`.
+
+#### `RecursiveCharacterTextSplitter`
+
+```python
+RecursiveCharacterTextSplitter(
+    chunk_size: int = 4000,
+    chunk_overlap: int = 200,
+    length_function: Callable[[str], int] = len,
+    separators: Optional[List[str]] = None,
+    keep_separator: bool = False,
+    is_separator_regex: bool = False,
+)
+```
+
+#### `TokenTextSplitter`
+
+```python
+TokenTextSplitter(
+    chunk_size: int = 4000,
+    chunk_overlap: int = 200,
+    length_function: Callable[[str], int] = len,
+    model_name: str = "cl100k_base",
+    encoding_name: Optional[str] = None,
+)
+```
+
+#### `SentenceSplitter`
+
+```python
+SentenceSplitter(
+    chunk_size: int = 4000,
+    chunk_overlap: int = 200,
+    length_function: Callable[[str], int] = len,
+    language: str = "auto",
+)
+```
+
+#### `RegexSplitter`
+
+```python
+RegexSplitter(
+    pattern: str,
+    chunk_size: int = 4000,
+    chunk_overlap: int = 200,
+    length_function: Callable[[str], int] = len,
+)
+```
+
+#### `RegexHierarchySplitter`
+
+```python
+RegexHierarchySplitter(
+    patterns: Union[List[Tuple[int, str]], List[Dict]],
+    exclude_patterns: Optional[List[str]] = None,
+    include_parent_content: Union[bool, int] = False,
+)
+```
+
+#### `MarkdownHierarchySplitter`
+
+```python
+MarkdownHierarchySplitter(
+    exclude_code_blocks: bool = True,
+    include_parent_content: Union[bool, int] = False,
+)
+```
+
+#### `JsonSplitter`
+
+```python
+JsonSplitter(
+    min_chunk_size: int = 0,
+    schema: str = ".",
+    schema_dialect: SchemaDialect = SchemaDialect.DOT_PATH,
+    ensure_ascii: bool = False,
+    metadata_value_max_len: Optional[int] = 256,
+)
+```
+
+#### `QASplitter`
+
+```python
+QASplitter()
+```
+
+#### `MarkdownTableSplitter`
+
+```python
+MarkdownTableSplitter(
+    *,
+    split_table_rows: bool = False,
+    use_first_row_as_header: bool = True,
+    max_rows_per_chunk: Optional[int] = None,
+    max_chunk_size: Optional[int] = None,
+    summarizer: Optional[TableSummarizer] = None,
+    summarize_table: bool = True,
+    summarize_chunks: bool = False,
+    inject_summaries_into_content: bool = False,
+)
+```
+
+#### `CSVTableSplitter`
+
+```python
+CSVTableSplitter(
+    max_rows_per_chunk: Optional[int] = None,
+    max_chunk_size: Optional[int] = None,
+    delimiter: Optional[str] = None,
+    use_first_row_as_header: bool = True,
+    summarizer: Optional[TableSummarizer] = None,
+    summarize_table: bool = True,
+    summarize_chunks: bool = False,
+    inject_summaries_into_content: bool = False,
+    length_function: Callable[[str], int] = len,
+)
+```
+
+## 6. Processors and Indexing
+
+### 6.1 Processors (`rag_lib.processors`)
+
+#### `SegmentEnricher`
+
+```python
+SegmentEnricher(llm: BaseChatModel)
+```
+
+- `enrich(segments: List[Segment]) -> List[Segment]`
+- `aenrich(segments: List[Segment]) -> List[Segment]`
+- Injects `generated_title`, `keywords`, and `summary` into metadata.
+
+#### `EntityExtractor`
+
+```python
+EntityExtractor(llm: BaseChatModel, store: BaseGraphStore)
+```
+
+- `process_segments(segments: List[Segment]) -> None`
+- `aprocess_segments(segments: List[Segment], concurrency: int = 5) -> None`
+
+#### `CommunitySummarizer`
+
+```python
+CommunitySummarizer(llm: BaseChatModel, store: BaseGraphStore)
+```
+
+- `summarize(communities: Dict[int, List[str]]) -> List[Segment]`
+
+#### `RaptorProcessor`
+
+```python
+RaptorProcessor(
+    llm: BaseChatModel,
+    embeddings: Embeddings,
+    max_levels: int = 3,
+    clustering_service: Optional[ClusteringService] = None,
+    summary_prompt_template: str | None = None,
+)
+```
+
+- `process_segments(segments: List[Segment]) -> List[Segment]`
+- `aprocess_segments(segments: List[Segment]) -> List[Segment]`
+
+### 6.2 `Indexer` (`rag_lib.core.indexer`)
+
+```python
+Indexer(
+    vector_store: VectorStore,
+    embeddings: Embeddings,
+    enricher: Optional[SegmentEnricher] = None,
+    entity_extractor: Optional[EntityExtractor] = None,
+    doc_store: Optional[BaseStore[str, Any]] = None,
+)
+```
+
+Methods:
+
+- `index(segments: List[Segment], parent_segments: Optional[List[Segment]] = None, batch_size: int = 100) -> None`
+- `aindex(segments: List[Segment], parent_segments: Optional[List[Segment]] = None, batch_size: int = 100) -> None`
+
+Behavior:
+
+- Optional enrichment before indexing.
+- Optional graph extraction during indexing.
+- Optional dual-storage hydration support via `doc_store`.
+
+## 7. Retrieval (`rag_lib.retrieval`)
+
+### 7.1 Atomic retrievers/factories (`retrievers.py`)
+
+```python
+RegexRetriever(documents: List[Union[Document, Segment]])
+FuzzyRetriever(documents: List[Union[Document, Segment]], threshold: int = 80, mode: str = "partial_ratio")
+
+create_vector_retriever(
+    vector_store: VectorStore,
+    top_k: int = 4,
+    search_type: str = "similarity",      # similarity | mmr | similarity_score_threshold
+    score_threshold: Optional[float] = None,
+) -> BaseRetriever
+
+create_bm25_retriever(
+    documents: List[Union[Document, Segment]],
+    top_k: int = 4,
+) -> BM25Retriever
+
+create_graph_retriever(
+    vector_store: Optional[VectorStore],
+    graph_store: Any,
+    config: Optional[Any] = None,
+    embedder: Optional[Embeddings] = None,
+    llm: Optional[BaseChatModel] = None,
+    doc_store: Optional[BaseStore[str, Document]] = None,
+    id_key: str = "segment_id",
+) -> BaseRetriever
+```
+
+### 7.2 Composition factories (`composition.py`)
+
+```python
+create_ensemble_retriever(retrievers: List[BaseRetriever], weights: Optional[List[float]] = None) -> BaseRetriever
+
+create_dual_storage_retriever(
+    vector_store: VectorStore,
+    doc_store: BaseStore[str, Document],
+    id_key: str = "segment_id",
+    search_kwargs: Optional[Dict[str, Any]] = None,
+) -> MultiVectorRetriever
+
+create_scored_dual_storage_retriever(
+    vector_store: VectorStore,
+    doc_store: BaseStore[str, Document],
+    id_key: str = "segment_id",
+    search_kwargs: Optional[Dict[str, Any]] = None,
+    search_type: SearchType = SearchType.similarity,
+    score_threshold: float | None = None,
+    hydration_mode: HydrationMode = HydrationMode.parents_replace,
+    enrichment_separator: str = "\n\n--- MATCHED CHILD CHUNK ---\n\n",
+) -> BaseRetriever
+
+create_reranking_retriever(
+    base_retriever_or_list: Union[BaseRetriever, List[BaseRetriever]],
+    reranker_model: Union[str, BaseCrossEncoder] = "BAAI/bge-reranker-base",
+    top_k: int = 5,
+    max_score_ratio: float = 0.0,
+    device: str = "cpu",
+) -> ContextualCompressionRetriever
+
+create_graph_hybrid_retriever(
+    vector_retriever: BaseRetriever,
+    graph_retriever: BaseRetriever,
+    weights: List[float] = [0.7, 0.3],
+) -> EnsembleRetriever
+```
+
+### 7.3 `ScoredMultiVectorRetriever` enums and defaults (`scored_retriever.py`)
+
+#### `SearchType`
+
+```python
+SearchType = {
+    "similarity",
+    "similarity_score_threshold",
+    "mmr",
+}
+```
+
+#### `HydrationMode`
+
+```python
+HydrationMode = {
+    "parents_replace",
+    "children_enriched",
+    "children_plus_parents",
+}
+```
+
+#### Constructor fields
+
+```python
+ScoredMultiVectorRetriever(
+    vector_store: VectorStore,
+    byte_store: ByteStore | None = None,
+    doc_store: BaseStore[str, Document],
+    id_key: str = "doc_id",
+    search_kwargs: dict = {},
+    search_type: SearchType = SearchType.similarity,
+    score_threshold: float | None = None,
+    hydration_mode: HydrationMode = HydrationMode.parents_replace,
+    enrichment_separator: str = "\n\n--- MATCHED CHILD CHUNK ---\n\n",
+)
+```
+
+Note: factory `create_scored_dual_storage_retriever(...)` defaults `id_key` to `"segment_id"`, overriding the class-level default.
+
+## 8. Graph RAG
+
+### 8.1 Graph domain (`rag_lib.graph`)
+
+#### `GraphNode`
+
+```python
+GraphNode(
+    id: str,
+    type: str,
+    label: str,
+    description: Optional[str] = None,
+    properties: Dict[str, Any] = {},
+    source_segment_id: Optional[str] = None,
+)
+```
+
+#### `GraphEdge`
+
+```python
+GraphEdge(
+    source_id: str,
+    target_id: str,
+    relation_type: str,
+    weight: float = 1.0,
+    properties: Dict[str, Any] = {},
+    source_segment_id: Optional[str] = None,
+)
+```
+
+Stores:
+
+- `NetworkXGraphStore()` (in-memory)
+- `Neo4jGraphStore(uri: str, auth: tuple[str, str], database: str = "neo4j")`
+
+### 8.2 `GraphQueryConfig` (`rag_lib.retrieval.graph_retriever`)
+
+```python
+GraphQueryConfig(
+    mode: Literal["local", "global", "hybrid", "mix"] = "hybrid",
+    top_k_entities: int = 12,
+    top_k_relations: int = 24,
+    top_k_chunks: int = 10,
+    max_hops: int = 2,
+    min_score: float = 0.15,
+    use_rerank: bool = True,
+    enable_keyword_extraction: bool = True,
+    vector_relevance_mode: Literal["strict_0_1", "normalize_minmax"] = "strict_0_1",
+    token_budget_total: int = 3500,
+    token_budget_entities: int = 700,
+    token_budget_relations: int = 900,
+    token_budget_chunks: int = 1900,
+)
+```
+
+### 8.3 `GraphRetriever` constructor fields
 
 ```python
 GraphRetriever(
-    vector_store,
-    graph_store,
-    config: GraphQueryConfig,
+    vector_store: Optional[VectorStore] = None,
+    graph_store: BaseGraphStore,
+    config: GraphQueryConfig = GraphQueryConfig(),
     embedder: Optional[Embeddings] = None,
     llm: Optional[BaseChatModel] = None,
     doc_store: Optional[BaseStore[str, Document]] = None,
@@ -296,260 +624,228 @@ GraphRetriever(
 )
 ```
 
-#### 9.3.1. `GraphRetriever` Parameters
+Runtime contract:
 
-| Parameter      | Type                                 | Required | Default       | Description |
-| :------------- | :----------------------------------- | :------- | :------------ | :---------- |
-| `vector_store` | `VectorStore`                        | Yes      | -             | Primary vector backend. Required in strict mode for scoring + hydration (`similarity_search_with_relevance_scores`, `get_by_ids`, async equivalents). |
-| `graph_store`  | `BaseGraphStore`                     | Yes      | -             | Graph backend with node/edge search, expansion, priors, and provenance methods. |
-| `config`       | `GraphQueryConfig`                   | Yes      | -             | Retrieval strategy configuration (mode, thresholds, budgets, limits). |
-| `embedder`     | `Embeddings \| None`                 | No       | `None`        | Optional embedding model passed to graph hybrid search methods. |
-| `llm`          | `BaseChatModel \| None`              | No       | `None`        | Required when `enable_keyword_extraction=True`. Must support `with_structured_output(...)`. |
-| `doc_store`    | `BaseStore[str, Document] \| None`   | No       | `None`        | Optional authoritative source for hydrated chunks (`mget`/`amget`). If absent, hydration uses `vector_store.get_by_ids`/`aget_by_ids`. |
-| `id_key`       | `str`                                | No       | `"segment_id"` | Metadata key used as source id for hydration and provenance matching. |
+- `vector_store` is required in strict mode (validated at runtime).
+- If `enable_keyword_extraction=True`, `llm` with `with_structured_output(...)` is required.
 
-#### 9.3.2. `GraphQueryConfig` Parameters
+Public methods:
 
-| Field | Type | Default | Description |
-| :---- | :--- | :------ | :---------- |
-| `mode` | `Literal["local", "global", "hybrid", "mix"]` | `"hybrid"` | Retrieval strategy mode. |
-| `top_k_entities` | `int` | `12` | Max entity candidates used in scoring/assembly. |
-| `top_k_relations` | `int` | `24` | Max relation/community candidates. |
-| `top_k_chunks` | `int` | `10` | Max hydrated chunk candidates before final budgeting. |
-| `max_hops` | `int` | `2` | Graph expansion depth from seeds (local/hybrid/mix). |
-| `min_score` | `float` | `0.15` | Final score floor after rerank. Lower values increase recall/noise. |
-| `use_rerank` | `bool` | `True` | Applies deterministic overlap rerank pass on final evidence. |
-| `enable_keyword_extraction` | `bool` | `True` | If `True`, query keywords are extracted via `llm.with_structured_output(...)`. If `False`, deterministic lexical keywords are used. |
-| `vector_relevance_mode` | `Literal["strict_0_1", "normalize_minmax"]` | `"strict_0_1"` | `strict_0_1`: raises if vector backend returns relevance outside `[0,1]`. `normalize_minmax`: explicit min-max normalization for raw distance-like scores. |
-| `token_budget_total` | `int` | `3500` | Total evidence token budget for final assembly. |
-| `token_budget_entities` | `int` | `700` | Token budget cap for entity evidence. |
-| `token_budget_relations` | `int` | `900` | Token budget cap for relation evidence. |
-| `token_budget_chunks` | `int` | `1900` | Token budget cap for chunk evidence. |
+- `retrieve(query: str, top_k: Optional[int] = None) -> List[Document]`
+- `aretrieve(query: str, top_k: Optional[int] = None) -> List[Document]`
+- `.invoke(...)` / `.ainvoke(...)` are supported via `BaseRetriever`.
 
-#### 9.3.3. Retrieval Modes
-
-| Mode | Behavior | Best For |
-| :--- | :------- | :------- |
-| `local` | Entity-first seeding, bounded subgraph expansion, relation/entity scoring, chunk hydration from provenance ids. | Precise entity-centric questions. |
-| `global` | Community + relation-first retrieval, then entity backfill, then hydration. | Thematic/high-level questions. |
-| `hybrid` | Runs `local` + `global` in parallel, merges by Reciprocal Rank Fusion (RRF). | Balanced precision/recall (recommended default). |
-| `mix` | `hybrid` + plain vector chunk retrieval, merged by RRF. | Maximum recall when graph coverage is incomplete. |
-
-#### 9.3.4. Returned Document Metadata Contract
+### 8.4 Graph retriever returned metadata contract
 
 Each returned `Document` includes:
 
-| Metadata Key | Description |
-| :----------- | :---------- |
-| `retrieval_kind` | One of: `chunk`, `entity`, `relation`, `community`. |
-| `score` | Final normalized score (`0.0` to `1.0`). |
-| `graph_mode` | Active mode: `local`, `global`, `hybrid`, `mix`. |
-| `source_segment_id` | Provenance source id when available. |
-| `entity_id` | Present when `retrieval_kind == "entity"`. |
-| `edge_id` | Present when `retrieval_kind == "relation"`. |
-| `community_id` | Present when `retrieval_kind == "community"`. |
+- `retrieval_kind`: one of `chunk`, `entity`, `relation`, `community`
+- `score`: normalized float in `[0.0, 1.0]`
+- `graph_mode`: one of `local`, `global`, `hybrid`, `mix`
+- `source_segment_id` when available
+- `entity_id` for entity hits
+- `edge_id` for relation hits
+- `community_id` for community hits
 
-#### 9.3.5. Strict Failure Semantics
+### 8.5 Graph retriever strict exceptions
 
-`GraphRetriever` raises explicit exceptions instead of returning empty fallbacks for core capability failures:
+- `GraphConfigurationError`
+- `GraphCapabilityError`
+- `GraphDataError`
 
-- `GraphConfigurationError`: invalid config or missing required components.
-- `GraphCapabilityError`: selected backend lacks required method.
-- `GraphDataError`: backend returns invalid/unsupported payload shape.
+## 9. MinerU Detailed Parameters and Enums
 
-### 9.4. Example Usage
+### 9.1 `parse_mode` enum-like values
 
 ```python
-from langchain_openai import ChatOpenAI
-from rag_lib.embeddings.factory import create_embeddings_model
-from rag_lib.graph.store import NetworkXGraphStore
-from rag_lib.processors.entity_extractor import EntityExtractor
-from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
-from rag_lib.vectors.factory import create_vector_store
-
-# 1. Setup
-store = NetworkXGraphStore()
-extractor = EntityExtractor(llm=my_llm, store=store)
-embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
-vector_store = create_vector_store(
-    provider="chroma",
-    embeddings=embeddings,
-    collection_name="graph_demo",
-    cleanup=True,
-)
-
-# 2. Extract Graph
-await extractor.aprocess_segments(segments)
-
-# 3. Index source chunks for hydration
-vector_store.add_texts(
-    texts=[s.content for s in segments],
-    metadatas=[{"segment_id": s.segment_id} for s in segments],
-    ids=[s.segment_id for s in segments],
-)
-
-# 4. Retrieve (deterministic lexical keywords)
-retriever = GraphRetriever(
-    vector_store=vector_store,
-    graph_store=store,
-    config=GraphQueryConfig(
-        mode="hybrid",
-        max_hops=1,
-        top_k_entities=8,
-        top_k_relations=10,
-        top_k_chunks=8,
-        min_score=0.45,
-        enable_keyword_extraction=False,
-    ),
-)
-docs = retriever.invoke("Теория вероятности")
+{"auto", "txt", "ocr"}
 ```
 
-#### 9.4.1. Strict LLM Keyword Extraction Example
+### 9.2 `backend` enum-like values
 
 ```python
-llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
-
-retriever = GraphRetriever(
-    vector_store=vector_store,
-    graph_store=store,
-    llm=llm,
-    config=GraphQueryConfig(
-        mode="mix",
-        enable_keyword_extraction=True,  # uses llm.with_structured_output(...)
-    ),
-)
-
-docs = retriever.invoke("Теория вероятности")
+{
+  "pipeline",
+  "hybrid-auto-engine",
+  "hybrid-http-client",
+  "vlm-auto-engine",
+  "vlm-http-client",
+}
 ```
 
-#### 9.4.2. Mode Preset Examples
+### 9.3 `source` enum-like values
 
 ```python
-# Local (high precision, lower noise)
-GraphQueryConfig(
-    mode="local",
-    max_hops=1,
-    top_k_entities=6,
-    top_k_relations=8,
-    top_k_chunks=6,
-    min_score=0.55,
-)
+{"huggingface", "modelscope", "local"}
+```
 
-# Global (relation/community-heavy)
-GraphQueryConfig(
-    mode="global",
-    max_hops=1,
-    top_k_entities=8,
-    top_k_relations=12,
-    top_k_chunks=6,
-    min_score=0.45,
-)
+### 9.4 Return metadata keys from `MinerULoader.load()`
 
-# Hybrid (balanced default)
-GraphQueryConfig(
-    mode="hybrid",
-    max_hops=1,
-    top_k_entities=8,
-    top_k_relations=10,
-    top_k_chunks=7,
-    min_score=0.50,
-)
+Always present:
 
-# Mix (max recall)
-GraphQueryConfig(
-    mode="mix",
-    max_hops=1,
-    top_k_entities=6,
-    top_k_relations=10,
-    top_k_chunks=8,
-    min_score=0.50,
+- `source`
+- `parser = "MinerU"`
+- `output_format = "markdown"`
+- `mineru_parse_mode`
+- `mineru_command`
+
+Conditionally present:
+
+- `mineru_backend`
+- `lang`
+- `mineru_source`
+- `start_page`
+- `end_page`
+
+## 10. RAPTOR (`rag_lib.raptor` + `rag_lib.processors.raptor`)
+
+### 10.1 Components and current constructor parameters
+
+#### `ClusteringService`
+
+```python
+ClusteringService()
+```
+
+#### `ClusterSummarizer`
+
+```python
+ClusterSummarizer(
+    llm: BaseChatModel,
+    summary_prompt_template: str | None = None,
 )
 ```
 
----
+Methods:
 
-## 10. Advanced Loaders
+- `summarize(texts: List[str], target_language="english", max_chars=1200, target_ratio=0.35) -> str`
+- `asummarize(...) -> str`
 
-### 10.1. MinerU (`rag_lib.loaders.miner_u`)
+#### `TreeBuilder`
 
-Integration with **Magic-PDF (MinerU)** for high-fidelity PDF parsing.
+```python
+TreeBuilder(
+    clustering_service: ClusteringService,
+    summarizer: ClusterSummarizer,
+    embeddings_model: Embeddings,
+    summary_target_ratio: float = 0.35,
+    summary_max_chars: int = 1200,
+    summary_min_chars: int = 120,
+    summary_preserve_language: bool = True,
+    strict_quality: bool = True,
+)
+```
 
-- **Purpose**: Extracts text, tables, and images while preserving layout information better than standard parsers.
-- **Requirement**: `pip install rag-lib[miner_u]`
-- **Class**: `MinerULoader`
+Methods:
+
+- `build(segments: List[Segment], n_levels: int = 3) -> List[Segment]`
+- `abuild(segments: List[Segment], n_levels: int = 3) -> List[Segment]`
+
+### 10.2 RAPTOR segment metadata emitted by `TreeBuilder`
+
+Summary segments include keys such as:
+
+- `raptor_level`
+- `raptor_cluster_id`
+- `raptor_child_ids`
+- `is_raptor_summary`
+- `raptor_summary_chars`
+- `raptor_children_chars`
+- `raptor_compression_ratio`
+- `raptor_summary_language`
+- `raptor_summary_max_chars`
+- `raptor_summary_exceeds_max_chars`
+
+After hierarchy finalization additional keys may include:
+
+- `raptor_parent_ids`
+- `raptor_depth_from_root`
+
+## 11. Configuration (`rag_lib.config`)
+
+`Settings` structure:
+
+- `llm: LLMSettings` (`LLM_` prefix)
+- `embeddings: EmbeddingsSettings` (`EMBEDDING_` prefix)
+- `vector_store: VectorStoreSettings` (`VECTOR_` prefix)
+- `ingestion: IngestionSettings` (`INGEST_` prefix)
+- `prompts: PromptSettings` (`PROMPT_` prefix)
+- top-level: `log_level`, `openai_api_key`, `openai_api_key_personal`, `mistral_api_key`, `ya_api_key`, `ya_folder_id`
+
+Notable defaults:
+
+- `ingestion.chunk_size = 100`
+- `ingestion.semantic_threshold = 0.6`
+- `ingestion.default_pdf_backend = "poppler"`
+
+## 12. Corrected Usage Examples
+
+### 12.1 MinerU PDF to chunks
 
 ```python
 from rag_lib.loaders.miner_u import MinerULoader
+from rag_lib.chunkers.recursive import RecursiveCharacterTextSplitter
 
-loader = MinerULoader("complex_layout.pdf")
-segments = loader.load()
-# Returns typed Segments (TEXT, TABLE, IMAGE)
+loader = MinerULoader(
+    "complex_layout.pdf",
+    parse_mode="txt",
+    start_page=0,
+    end_page=4,
+    parse_formula=False,
+    parse_table=False,
+    timeout_seconds=1200,
+)
+docs = loader.load()  # List[Document]
+
+splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=120)
+segments = splitter.split_documents(docs)  # List[Segment]
 ```
 
----
-
-## 11. RAPTOR (Recursive Abstractive Processing)
-
-**RAPTOR** (`rag_lib.raptor`) is a technique for **hierarchical summarization**. It recursively clusters text segments and summarizes them to build a "tree" of information. This allows the system to answer high-level questions that span across many documents.
-
-### 11.1. Installation & Environment (Crucial!)
-
-RAPTOR relies on `umap-learn` for dimensionality reduction, which has complex dependencies (Numba, llvmlite).
-
-> [!WARNING]
-> **Avoid `uv sync` for RAPTOR**: `uv` often fails to build `numba` because it requires specific C++ compilers.
-
-**Recommended Installation**:
-
-1.  **Use `pip` explicitly** inside your virtual environment to get pre-built wheels:
-
-    ```bash
-    # Windows / Linux / Mac
-    pip install umap-learn scikit-learn
-    ```
-
-2.  **Project Config**:
-    To install via project extras (if `uv` supports wheels on your OS):
-
-    ```bash
-    pip install ".[raptor]"
-    # OR
-    uv sync --extra raptor
-    ```
-
-3.  **Troubleshooting**:
-    If you see `ImportError: No module named 'umap'`, run the manual `pip install` command above.
-
-### 11.2. Components
-
-| Component               | Import Path                    | Description                                                                  |
-| :---------------------- | :----------------------------- | :--------------------------------------------------------------------------- |
-| **`ClusteringService`** | `rag_lib.raptor.clustering`    | Uses **UMAP** (dim reduction) + **GMM** (Gaussian Mixture) to cluster texts. |
-| **`ClusterSummarizer`** | `rag_lib.raptor.summarization` | Summarizes a list of texts using an LLM.                                     |
-| **`TreeBuilder`**       | `rag_lib.raptor.tree_builder`  | Orchestrates the recursive Level 0 -> Level N tree creation.                 |
-| **`RaptorProcessor`**   | `rag_lib.processors.raptor`    | Main entry point. Wraps `TreeBuilder` into a standard Processor.             |
-
-### 11.3. Example Usage
+### 12.2 Graph retrieval (strict lexical keywords, no LLM keyword extraction)
 
 ```python
-from rag_lib.processors.raptor import RaptorProcessor
-from rag_lib.raptor.clustering import ClusteringService
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from rag_lib.graph.store import NetworkXGraphStore
+from rag_lib.retrieval.graph_retriever import GraphRetriever, GraphQueryConfig
 
-# 1. Setup Components
-llm = ChatOpenAI(model="gpt-4o")
-embeddings = OpenAIEmbeddings()
+graph_store = NetworkXGraphStore()
+# Populate graph_store + vector_store first.
 
-# 2. Initialize Processor (Automatic Clustering Service)
-raptor = RaptorProcessor(
-    llm=llm,
-    embeddings=embeddings,
-    max_levels=3
+retriever = GraphRetriever(
+    vector_store=vector_store,
+    graph_store=graph_store,
+    config=GraphQueryConfig(
+        mode="hybrid",
+        enable_keyword_extraction=False,
+        top_k_entities=8,
+        top_k_relations=10,
+        top_k_chunks=8,
+    ),
 )
 
-# 3. Process Segments
-# Input: List[Segment] (Level 0)
-# Output: List[Segment] (Level 0 + Level 1 Summaries + Level 2 Summaries...)
-enriched_segments = await raptor.aprocess(raw_segments)
+docs = retriever.invoke("probability theory")
 ```
+
+### 12.3 Scored dual storage retriever with explicit hydration mode
+
+```python
+from rag_lib.retrieval.composition import create_scored_dual_storage_retriever
+from rag_lib.retrieval.scored_retriever import SearchType, HydrationMode
+
+retriever = create_scored_dual_storage_retriever(
+    vector_store=vector_store,
+    doc_store=doc_store,
+    id_key="segment_id",
+    search_type=SearchType.similarity_score_threshold,
+    hydration_mode=HydrationMode.parents_replace,
+    score_threshold=0.4,
+)
+
+docs = retriever.invoke("query")
+```
+
+## 13. Migration Notes
+
+- `rag_lib.loaders.structured` is removed and raises `ImportError`.
+- Use `from rag_lib.loaders.docx import DocXLoader`.
+- `RegexHierarchyLoader` is now a raw text loader; hierarchical splitting belongs to `RegexHierarchySplitter` / `MarkdownHierarchySplitter`.
+- `rag_lib.__version__` is not defined in package code; use `importlib.metadata.version("rag-lib")`.
