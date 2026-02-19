@@ -24,6 +24,23 @@ try:
 except ImportError:
     PGVector = None
 
+
+def _strict_chroma_cosine_relevance(distance: float) -> float:
+    """
+    Convert Chroma cosine distance to relevance in [0, 1] strictly.
+
+    Chroma cosine distance is expected in [0, 2]:
+      - 0 means identical direction
+      - 2 means opposite direction
+    """
+    value = float(distance)
+    if value < 0.0 or value > 2.0:
+        raise ValueError(
+            f"Unexpected Chroma cosine distance {value:.6f}; expected in [0, 2]"
+        )
+    return 1.0 - (value / 2.0)
+
+
 def create_vector_store(
     provider: str = "chroma",
     embeddings: Optional[Embeddings] = None,
@@ -58,7 +75,10 @@ def create_vector_store(
             return Chroma(
                 collection_name=collection_name,
                 embedding_function=embeddings,
-                persist_directory=persist_dir
+                persist_directory=persist_dir,
+                # Make vector relevance contract explicit and stable for strict retrievers.
+                collection_configuration={"hnsw": {"space": "cosine"}},
+                relevance_score_fn=_strict_chroma_cosine_relevance,
             )
 
         if cleanup:

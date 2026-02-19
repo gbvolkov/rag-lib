@@ -320,6 +320,7 @@ GraphRetriever(
 | `min_score` | `float` | `0.15` | Final score floor after rerank. Lower values increase recall/noise. |
 | `use_rerank` | `bool` | `True` | Applies deterministic overlap rerank pass on final evidence. |
 | `enable_keyword_extraction` | `bool` | `True` | If `True`, query keywords are extracted via `llm.with_structured_output(...)`. If `False`, deterministic lexical keywords are used. |
+| `vector_relevance_mode` | `Literal["strict_0_1", "normalize_minmax"]` | `"strict_0_1"` | `strict_0_1`: raises if vector backend returns relevance outside `[0,1]`. `normalize_minmax`: explicit min-max normalization for raw distance-like scores. |
 | `token_budget_total` | `int` | `3500` | Total evidence token budget for final assembly. |
 | `token_budget_entities` | `int` | `700` | Token budget cap for entity evidence. |
 | `token_budget_relations` | `int` | `900` | Token budget cap for relation evidence. |

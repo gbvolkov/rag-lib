@@ -35,18 +35,19 @@ class TableLoader:
              return []
 
 class JsonLoader:
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, ensure_ascii: bool = False):
         self.file_path = file_path
+        self.ensure_ascii = ensure_ascii
 
     def load(self) -> List[Document]:
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
-                # Load the entire file content as one document
-                f.seek(0)
+                # Normalize JSON to decoded Unicode text so locale-specific chars
+                # are preserved as readable symbols instead of \uXXXX escapes.
                 content = f.read()
-                # Validate JSON? Optional.
-                json.loads(content) # Just to check validity
-                return [Document(page_content=content, metadata={"source": self.file_path})]
+                parsed = json.loads(content)
+                normalized = json.dumps(parsed, ensure_ascii=self.ensure_ascii)
+                return [Document(page_content=normalized, metadata={"source": self.file_path})]
         except Exception:
             return []
 

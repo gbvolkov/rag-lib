@@ -51,6 +51,7 @@ class GraphQueryConfig:
     min_score: float = 0.15
     use_rerank: bool = True
     enable_keyword_extraction: bool = True
+    vector_relevance_mode: Literal["strict_0_1", "normalize_minmax"] = "strict_0_1"
     token_budget_total: int = 3500
     token_budget_entities: int = 700
     token_budget_relations: int = 900
@@ -216,6 +217,10 @@ class GraphRetriever(BaseRetriever):
     def _validate_config(self) -> None:
         if self.config.mode not in {"local", "global", "hybrid", "mix"}:
             raise GraphConfigurationError(f"Unsupported graph mode: {self.config.mode}")
+        if self.config.vector_relevance_mode not in {"strict_0_1", "normalize_minmax"}:
+            raise GraphConfigurationError(
+                f"Unsupported vector_relevance_mode: {self.config.vector_relevance_mode}"
+            )
         if self.config.top_k_entities <= 0:
             raise GraphConfigurationError("top_k_entities must be > 0")
         if self.config.top_k_relations <= 0:
@@ -286,19 +291,13 @@ class GraphRetriever(BaseRetriever):
         )
 
     def _keyword_tiers_from_payload(self, payload: Any) -> KeywordTiers:
-        if isinstance(payload, _KeywordPayload):
-            high = payload.high_level_keywords
-            low = payload.low_level_keywords
-        elif isinstance(payload, dict):
-            high = payload.get("high_level_keywords")
-            low = payload.get("low_level_keywords")
-        elif hasattr(payload, "high_level_keywords") and hasattr(payload, "low_level_keywords"):
-            high = getattr(payload, "high_level_keywords")
-            low = getattr(payload, "low_level_keywords")
-        else:
+        if not isinstance(payload, _KeywordPayload):
             raise GraphDataError(
-                "Structured keyword payload must expose high_level_keywords and low_level_keywords"
+                "Structured keyword payload must be _KeywordPayload; "
+                f"got {type(payload).__name__}"
             )
+        high = payload.high_level_keywords
+        low = payload.low_level_keywords
 
         if not isinstance(high, list) or not isinstance(low, list):
             raise GraphDataError(
@@ -1079,15 +1078,10 @@ class GraphRetriever(BaseRetriever):
         if not isinstance(rows, list):
             raise GraphDataError("similarity_search_with_relevance_scores must return list")
 
-        output: List[tuple[Document, float]] = []
-        for row in rows:
-            if not isinstance(row, tuple) or len(row) != 2:
-                raise GraphDataError("Vector score rows must be tuple[Document, float]")
-            doc, score = row
-            if not isinstance(doc, Document):
-                raise GraphDataError("Vector score rows must contain Document")
-            output.append((doc, self._clamp(float(score))))
-        return output
+        return self._coerce_vector_score_rows(
+            rows,
+            scorer_name="similarity_search_with_relevance_scores",
+        )
 
     async def _vector_search_scores_async(
         self,
@@ -1110,15 +1104,68 @@ class GraphRetriever(BaseRetriever):
         if not isinstance(rows, list):
             raise GraphDataError("asimilarity_search_with_relevance_scores must return list")
 
-        output: List[tuple[Document, float]] = []
+        return self._coerce_vector_score_rows(
+            rows,
+            scorer_name="asimilarity_search_with_relevance_scores",
+        )
+
+    def _coerce_vector_score_rows(
+        self,
+        rows: Any,
+        *,
+        scorer_name: str,
+    ) -> List[tuple[Document, float]]:
+        if not isinstance(rows, list):
+            raise GraphDataError(f"{scorer_name} must return list")
+
+        parsed: List[tuple[Document, float]] = []
         for row in rows:
             if not isinstance(row, tuple) or len(row) != 2:
-                raise GraphDataError("Async vector score rows must be tuple[Document, float]")
+                raise GraphDataError(
+                    f"{scorer_name} rows must be tuple[Document, float]"
+                )
             doc, score = row
             if not isinstance(doc, Document):
-                raise GraphDataError("Async vector score rows must contain Document")
-            output.append((doc, self._clamp(float(score))))
-        return output
+                raise GraphDataError(
+                    f"{scorer_name} rows must contain Document"
+                )
+            try:
+                parsed.append((doc, float(score)))
+            except (TypeError, ValueError) as exc:
+                raise GraphDataError(
+                    f"{scorer_name} score must be numeric, got {score!r}"
+                ) from exc
+
+        if not parsed:
+            return parsed
+
+        min_score = min(score for _, score in parsed)
+        max_score = max(score for _, score in parsed)
+        out_of_range = min_score < 0.0 or max_score > 1.0
+        if not out_of_range:
+            return parsed
+
+        if self.config.vector_relevance_mode == "normalize_minmax":
+            return self._normalize_minmax_scores(parsed)
+
+        raise GraphDataError(
+            f"{scorer_name} returned relevance scores outside [0, 1] "
+            f"(min={min_score:.6f}, max={max_score:.6f}). "
+            "Set GraphQueryConfig(vector_relevance_mode='normalize_minmax') only when "
+            "the backend returns raw distance-like scores."
+        )
+
+    def _normalize_minmax_scores(
+        self,
+        rows: List[tuple[Document, float]],
+    ) -> List[tuple[Document, float]]:
+        min_score = min(score for _, score in rows)
+        max_score = max(score for _, score in rows)
+        spread = max_score - min_score
+        if spread <= 1e-12:
+            # All raw scores are effectively identical; keep deterministic neutral relevance.
+            return [(doc, 0.5) for doc, _ in rows]
+        return [(doc, (score - min_score) / spread) for doc, score in rows]
 
     def _tokenize(self, text: str) -> List[str]:
         return re.findall(r"[A-Za-z0-9\u0400-\u04FF]+", text.lower())

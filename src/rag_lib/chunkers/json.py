@@ -12,10 +12,12 @@ class JsonSplitter(TextSplitter):
     def __init__(
         self,
         min_chunk_size: int = 0, # Unused for JSON logic usually, but kept for interface
-        jq_schema: str = "."
+        jq_schema: str = ".",
+        ensure_ascii: bool = False,
     ):
         super().__init__()
         self.jq_schema = jq_schema
+        self.ensure_ascii = ensure_ascii
 
     def split_text(self, text: str) -> List[str]:
         """
@@ -42,7 +44,9 @@ class JsonSplitter(TextSplitter):
             chunks = []
             for item in target:
                 if isinstance(item, (dict, list)):
-                    chunks.append(json.dumps(item, indent=2))
+                    chunks.append(
+                        json.dumps(item, indent=2, ensure_ascii=self.ensure_ascii)
+                    )
                 else:
                     chunks.append(str(item))
             return chunks
@@ -50,7 +54,9 @@ class JsonSplitter(TextSplitter):
         elif isinstance(target, dict):
             # Treat whole dict as one chunk? Or split keys?
             # Defaulting to one chunk if it's a single dict object
-            return [json.dumps(target, indent=2)]
+            return [
+                json.dumps(target, indent=2, ensure_ascii=self.ensure_ascii)
+            ]
             
         return [str(target)]
 

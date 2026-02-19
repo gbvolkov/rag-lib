@@ -26,18 +26,6 @@ Features Tested:
 """
 
 
-def _resolve_docx_path(docs_dir: Path) -> Optional[Path]:
-    preferred_name = "????????????????? ??????.docx"
-    preferred_path = docs_dir / preferred_name
-    if preferred_path.exists():
-        return preferred_path
-
-    candidates = sorted(docs_dir.glob("*.docx"))
-    if candidates:
-        return candidates[0]
-    return None
-
-
 def _build_graph_snapshot(graph_store: NetworkXGraphStore) -> Dict[str, Any]:
     nodes = []
     for node_id, attrs in graph_store.graph.nodes(data=True):
@@ -64,7 +52,9 @@ def main() -> None:
     print_section("05. DOCX Graph Workflow")
 
     docs_dir = Path(__file__).parent.parent / "docs"
-    docx_path = _resolve_docx_path(docs_dir)
+    #docx_path = _resolve_docx_path(docs_dir)
+    docx_path = docs_dir / "Параметризованные задачи.docx"
+
     if not docx_path:
         print(f"No DOCX files found in: {docs_dir}")
         return
@@ -177,6 +167,7 @@ def main() -> None:
                 token_budget_relations=650,
                 token_budget_chunks=2400,
                 enable_keyword_extraction=True,
+                vector_relevance_mode="strict_0_1",
             )
         elif mode == "mix":
             # Mix: strongest chunk recall, but keep graph evidence filtered.
@@ -191,6 +182,7 @@ def main() -> None:
                 token_budget_relations=700,
                 token_budget_chunks=2350,
                 enable_keyword_extraction=True,
+                vector_relevance_mode="strict_0_1",
             )
         elif mode == "global":
             # Global: relation/community-centric view with moderate filtering.
@@ -205,6 +197,7 @@ def main() -> None:
                 token_budget_relations=1200,
                 token_budget_chunks=1700,
                 enable_keyword_extraction=True,
+                vector_relevance_mode="strict_0_1",
             )
         else:
             # Hybrid: balanced graph coverage + chunk evidence.
@@ -219,6 +212,7 @@ def main() -> None:
                 token_budget_relations=900,
                 token_budget_chunks=2000,
                 enable_keyword_extraction=True,
+                vector_relevance_mode="strict_0_1",
             )
 
         retriever = GraphRetriever(
@@ -228,7 +222,7 @@ def main() -> None:
             llm=llm,
         )
 
-        queries = ["?????? ???????????", "???????????"]
+        queries = ["Теория вероятности", "вероятность"]
         for query in queries:
             print(f"Query: {query}")
             results = retriever.invoke(query)

@@ -6,7 +6,7 @@ from langchain_core.vectorstores import VectorStore
 
 from rag_lib.graph.domain import GraphEdge, GraphNode
 from rag_lib.graph.store import NetworkXGraphStore
-from rag_lib.retrieval.graph_retriever import GraphQueryConfig, GraphRetriever
+from rag_lib.retrieval.graph_retriever import GraphDataError, GraphQueryConfig, GraphRetriever
 
 
 class StrictLexicalVectorStore(VectorStore):
@@ -78,6 +78,22 @@ class StrictLexicalVectorStore(VectorStore):
     @property
     def embeddings(self):
         return None
+
+
+class OutOfRangeScoreVectorStore(StrictLexicalVectorStore):
+    def similarity_search_with_relevance_scores(self, query, k=4, filter=None, **kwargs):
+        docs = self.docs
+        if filter:
+            docs = [
+                doc
+                for doc in docs
+                if all((doc.metadata or {}).get(key) == value for key, value in filter.items())
+            ]
+        rows = []
+        for idx, doc in enumerate(docs[:k]):
+            # Intentionally out of [0, 1] to validate strict handling.
+            rows.append((doc, -0.20 - (idx * 0.05)))
+        return rows
 
 
 def _build_graph_store() -> NetworkXGraphStore:
@@ -306,6 +322,48 @@ def test_stable_tie_ordering_is_deterministic():
     ]
 
     assert first == second
+
+
+def test_out_of_range_vector_relevance_scores_raise_in_strict_mode():
+    store = _build_graph_store()
+    vector_store = OutOfRangeScoreVectorStore(docs=_build_vector_store().docs)
+    retriever = GraphRetriever(
+        vector_store=vector_store,
+        graph_store=store,
+        config=GraphQueryConfig(
+            mode="mix",
+            top_k_chunks=4,
+            min_score=0.0,
+            enable_keyword_extraction=False,
+            vector_relevance_mode="strict_0_1",
+        ),
+    )
+
+    with pytest.raises(GraphDataError, match=r"outside \[0, 1\]"):
+        retriever.retrieve("probability")
+
+
+def test_out_of_range_vector_scores_can_be_explicitly_normalized():
+    store = _build_graph_store()
+    vector_store = OutOfRangeScoreVectorStore(docs=_build_vector_store().docs)
+    retriever = GraphRetriever(
+        vector_store=vector_store,
+        graph_store=store,
+        config=GraphQueryConfig(
+            mode="mix",
+            top_k_chunks=4,
+            min_score=0.0,
+            enable_keyword_extraction=False,
+            vector_relevance_mode="normalize_minmax",
+        ),
+    )
+
+    rows = retriever._vector_search_scores_sync("probability", k=4, filter_=None)
+    assert rows
+    scores = [score for _, score in rows]
+    assert all(0.0 <= score <= 1.0 for score in scores)
+    assert max(scores) == pytest.approx(1.0)
+    assert min(scores) == pytest.approx(0.0)
 
 
 @pytest.mark.asyncio

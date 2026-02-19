@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from rag_lib.vectors.factory import create_vector_store
+from rag_lib.vectors.factory import create_vector_store, _strict_chroma_cosine_relevance
 
 # Mock Embeddings
 mock_embeddings = MagicMock()
@@ -8,11 +8,12 @@ mock_embeddings = MagicMock()
 def test_create_chroma():
     with patch("rag_lib.vectors.factory.Chroma") as mock_chroma:
         create_vector_store(provider="chroma", embeddings=mock_embeddings)
-        mock_chroma.assert_called_with(
-            collection_name="rag_collection",
-            embedding_function=mock_embeddings,
-            persist_directory="./chroma_db"
-        )
+        kwargs = mock_chroma.call_args.kwargs
+        assert kwargs["collection_name"] == "rag_collection"
+        assert kwargs["embedding_function"] is mock_embeddings
+        assert kwargs["persist_directory"] == "./chroma_db"
+        assert kwargs["collection_configuration"] == {"hnsw": {"space": "cosine"}}
+        assert callable(kwargs["relevance_score_fn"])
 
 def test_create_qdrant_memory():
     with patch("rag_lib.vectors.factory.Qdrant") as mock_qdrant:
@@ -63,3 +64,14 @@ def test_faiss_creation():
 def test_missing_embeddings():
     with pytest.raises(ValueError):
         create_vector_store(provider="chroma", embeddings=None)
+
+
+def test_strict_chroma_cosine_relevance_mapping():
+    assert _strict_chroma_cosine_relevance(0.0) == pytest.approx(1.0)
+    assert _strict_chroma_cosine_relevance(1.0) == pytest.approx(0.5)
+    assert _strict_chroma_cosine_relevance(2.0) == pytest.approx(0.0)
+
+    with pytest.raises(ValueError):
+        _strict_chroma_cosine_relevance(-0.01)
+    with pytest.raises(ValueError):
+        _strict_chroma_cosine_relevance(2.01)
