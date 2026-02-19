@@ -29,6 +29,7 @@ def _print_results(label: str, results: list) -> None:
         print(
             "    "
             f"json_index={metadata.get('json_index', 'n/a')} "
+            f"json__metadata__it_system={metadata.get('json__metadata__it_system', 'n/a')} "
             f"segment_id={metadata.get('segment_id', 'n/a')} "
             f"source={metadata.get('source', 'n/a')}"
         )
@@ -46,7 +47,7 @@ def main() -> None:
 
     print_section("1. Loading JSON")
     print(f"Loading {json_path.name} using JsonLoader...")
-    loader = JsonLoader(str(json_path), ensure_ascii=False)
+    loader = JsonLoader(str(json_path), output_format="json", schema=".", ensure_ascii=False)
     docs = loader.load()
 
     if not docs:
@@ -58,7 +59,7 @@ def main() -> None:
     save_json_results(docs, "09_json_hybrid", "loaded_documents")
 
     print_section("2. JSON Segmentation")
-    splitter = JsonSplitter(jq_schema=".", ensure_ascii=False)
+    splitter = JsonSplitter(schema=".", ensure_ascii=False)
     segments = splitter.split_documents(docs)
 
     print(f"Generated {len(segments)} segment(s) from JSON.")
@@ -86,18 +87,36 @@ def main() -> None:
 
     print_section("4. Hybrid Retrieval")
     query = "WEB:CRM"
-    metadata_filter = {"json_index": 0}
-
+    common_metadata_filter = {"json_index": 0}
+    sample_metadata = segments[0].metadata or {}
+    json_metadata_filter = {}
+    #if sample_metadata.get("json__metadata__it_system"):
+    #    json_metadata_filter = {"json__metadata__it_system": sample_metadata["json__metadata__it_system"]}
+    json_metadata_filter = {"json__metadata__it_system": "1С:CRM"}
     print(f"Query: {query}")
     print("Running baseline vector search...")
     baseline_results = vector_store.similarity_search(query, k=3)
     save_json_results(baseline_results, "09_json_hybrid", "retrieved_results_basic")
     _print_results("Baseline Results", baseline_results)
 
-    print(f"Running filtered vector search with filter={metadata_filter}...")
-    filtered_results = vector_store.similarity_search(query, k=3, filter=metadata_filter)
+    print(f"Running filtered vector search with common filter={common_metadata_filter}...")
+    filtered_results = vector_store.similarity_search(query, k=3, filter=common_metadata_filter)
     save_json_results(filtered_results, "09_json_hybrid", "retrieved_results_filtered")
-    _print_results("Filtered Results", filtered_results)
+    _print_results("Common Metadata Filter Results", filtered_results)
+
+    if json_metadata_filter:
+        print(f"Running filtered vector search with JSON metadata filter={json_metadata_filter}...")
+        filtered_json_metadata_results = vector_store.similarity_search(
+            query,
+            k=3,
+            filter=json_metadata_filter,
+        )
+        save_json_results(
+            filtered_json_metadata_results,
+            "09_json_hybrid",
+            "retrieved_results_filtered_json_metadata",
+        )
+        _print_results("JSON Metadata Filter Results", filtered_json_metadata_results)
 
 
 if __name__ == "__main__":

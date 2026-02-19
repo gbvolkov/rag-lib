@@ -39,7 +39,7 @@ def main():
 
     print(f"Loading {JSON_FILE.name} using JsonLoader...")
     # JsonLoader loads a list of objects as segments
-    loader = JsonLoader(str(JSON_FILE), jq_schema=".")
+    loader = JsonLoader(str(JSON_FILE), schema=".")
     segments = loader.load()
     
     # Filter out empty content
