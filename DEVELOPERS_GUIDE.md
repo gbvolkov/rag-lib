@@ -78,7 +78,9 @@ Method:
 - `PDFLoader`
 - `PyMuPDFLoader`
 - `DocXLoader`
+- `HTMLLoader`
 - `SemanticChunker`
+- `HTMLSplitter`
 - `SegmentEnricher`
 
 ## 4. Loaders (`rag_lib.loaders`)
@@ -121,6 +123,20 @@ DocXLoader(file_path: str)
 - Converts DOCX to markdown.
 - Returns one `Document` on success, `[]` on failures.
 - Metadata includes `source_type="docx"`, `output_format="markdown"`.
+
+#### `HTMLLoader` (`rag_lib.loaders.html`)
+
+```python
+HTMLLoader(
+    file_path: str,
+    output_format: Literal["markdown", "html"] = "markdown",
+)
+```
+
+- Strict fail-fast loader (no fallback path).
+- Returns exactly one `Document` on success.
+- Raises on file read, parse, or render errors.
+- Metadata includes `source_type="html"`, `output_format`.
 
 #### `CSVLoader` (`rag_lib.loaders.csv_excel`)
 
@@ -376,6 +392,28 @@ CSVTableSplitter(
     length_function: Callable[[str], int] = len,
 )
 ```
+
+#### `HTMLSplitter`
+
+```python
+HTMLSplitter(
+    output_format: Literal["markdown", "html"] = "markdown",
+    split_table_rows: bool = False,
+    use_first_row_as_header: bool = True,
+    max_rows_per_chunk: Optional[int] = None,
+    max_chunk_size: Optional[int] = None,
+    summarizer: Optional[TableSummarizer] = None,
+    summarize_table: bool = True,
+    summarize_chunks: bool = False,
+    inject_summaries_into_content: bool = False,
+    include_parent_content: Union[bool, int] = False,
+)
+```
+
+- Splits by HTML heading hierarchy (`h1..h6`), preserving lists and tables.
+- Emits separate `SegmentType.TABLE` chunks for `<table>`.
+- Supports row chunking and summary metadata parity with markdown/csv table splitters.
+- Strict fail-fast behavior: parse/render/table/summarizer errors are raised.
 
 ## 6. Processors and Indexing
 
@@ -848,4 +886,5 @@ docs = retriever.invoke("query")
 - `rag_lib.loaders.structured` is removed and raises `ImportError`.
 - Use `from rag_lib.loaders.docx import DocXLoader`.
 - `RegexHierarchyLoader` is now a raw text loader; hierarchical splitting belongs to `RegexHierarchySplitter` / `MarkdownHierarchySplitter`.
+- `HTMLLoader` and `HTMLSplitter` are strict (no fallback behavior for malformed input).
 - `rag_lib.__version__` is not defined in package code; use `importlib.metadata.version("rag-lib")`.
