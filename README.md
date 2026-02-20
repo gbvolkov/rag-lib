@@ -50,4 +50,42 @@ indexer = Indexer(vector_store=my_vector, embeddings=my_embeddings)
 indexer.index(text_segments)
 ```
 
+### Web Crawling Example
+
+```python
+import asyncio
+from rag_lib import WebLoader, AsyncWebLoader
+
+# Sync crawl (requests only)
+sync_loader = WebLoader(
+    url="https://example.com/docs",
+    depth=1,
+    output_format="markdown",
+    fetch_mode="requests",
+    crawl_scope="same_host",
+)
+docs = sync_loader.load()
+
+# Async crawl (requests with Playwright fallback)
+async def run():
+    async_loader = AsyncWebLoader(
+        url="https://example.com/docs",
+        depth=2,
+        output_format="markdown",
+        fetch_mode="requests_fallback_playwright",
+        follow_download_links=True,
+        max_concurrency=6,
+    )
+    return await async_loader.load()
+
+asyncio.run(run())
+```
+
+Playwright mode requires optional dependency and browser install:
+
+```bash
+pip install -e ".[web]"
+playwright install chromium
+```
+
 For more detailed documentation, please refer to [DEVELOPERS_GUIDE.md](DEVELOPERS_GUIDE.md).

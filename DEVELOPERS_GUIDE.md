@@ -30,6 +30,7 @@ pip install -e .
 - `rag-lib[graph]`: Neo4j graph backend support
 - `rag-lib[raptor]`: RAPTOR clustering dependencies
 - `rag-lib[pymupdf]`: PyMuPDF markdown/html loader support
+- `rag-lib[web]`: Playwright browser backend for WebLoader/AsyncWebLoader
 
 Example:
 
@@ -79,6 +80,8 @@ Method:
 - `PyMuPDFLoader`
 - `DocXLoader`
 - `HTMLLoader`
+- `WebLoader`
+- `AsyncWebLoader`
 - `SemanticChunker`
 - `HTMLSplitter`
 - `SegmentEnricher`
@@ -137,6 +140,61 @@ HTMLLoader(
 - Returns exactly one `Document` on success.
 - Raises on file read, parse, or render errors.
 - Metadata includes `source_type="html"`, `output_format`.
+
+#### `WebLoader` (`rag_lib.loaders.web`)
+
+```python
+WebLoader(
+    url: str,
+    depth: int = 0,
+    output_format: Literal["markdown", "html"] = "markdown",
+    fetch_mode: Literal["requests", "requests_fallback_playwright", "playwright"] = "requests",
+    crawl_scope: Literal["same_host", "same_domain", "allowed_domains", "allow_all"] = "same_host",
+    allowed_domains: Optional[List[str]] = None,
+    login_url: Optional[str] = None,
+    login_processor: Optional[Callable[[page, context, start_url, login_url, current_url], bool | None]] = None,
+    follow_download_links: bool = False,
+    request_timeout_seconds: float = 20.0,
+    playwright_timeout_ms: int = 30000,
+    playwright_headless: bool = True,
+    user_agent: str = "rag-lib-webloader/1.0",
+    max_pages: Optional[int] = None,
+    retry_attempts: int = 1,
+    continue_on_error: bool = True,
+)
+```
+
+- Returns one `Document` per crawled HTML page.
+- Optional download routing (`follow_download_links=True`) routes to existing loaders.
+- Login callback is used only for Playwright retrieval and runs in the same browser context.
+- Exposes diagnostics in `last_errors` and `last_stats`.
+
+#### `AsyncWebLoader` (`rag_lib.loaders.web_async`)
+
+```python
+AsyncWebLoader(
+    url: str,
+    depth: int = 0,
+    output_format: Literal["markdown", "html"] = "markdown",
+    fetch_mode: Literal["requests", "requests_fallback_playwright", "playwright"] = "requests",
+    crawl_scope: Literal["same_host", "same_domain", "allowed_domains", "allow_all"] = "same_host",
+    allowed_domains: Optional[List[str]] = None,
+    login_url: Optional[str] = None,
+    login_processor: Optional[Callable[[page, context, start_url, login_url, current_url], Awaitable[bool | None] | bool | None]] = None,
+    follow_download_links: bool = False,
+    request_timeout_seconds: float = 20.0,
+    playwright_timeout_ms: int = 30000,
+    playwright_headless: bool = True,
+    user_agent: str = "rag-lib-webloader/1.0",
+    max_pages: Optional[int] = None,
+    retry_attempts: int = 1,
+    max_concurrency: int = 5,
+    continue_on_error: bool = True,
+)
+```
+
+- Async counterpart with bounded concurrency and retry control.
+- Supports the same fetch modes, crawl scopes, download routing, and diagnostics as `WebLoader`.
 
 #### `CSVLoader` (`rag_lib.loaders.csv_excel`)
 

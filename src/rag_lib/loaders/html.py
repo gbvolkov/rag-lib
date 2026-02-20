@@ -14,6 +14,27 @@ from rag_lib.html_processing import (
 )
 
 
+def render_html_content(
+    content: str | bytes,
+    output_format: Literal["markdown", "html"] = "markdown",
+) -> str:
+    """
+    Parse and normalize raw HTML content into markdown or cleaned HTML.
+    Strict behavior: parsing/rendering errors are raised to the caller.
+    """
+    if output_format not in {"markdown", "html"}:
+        raise ValueError("output_format must be 'markdown' or 'html'")
+
+    document = parse_html_document(content)
+    strip_non_content_nodes(document)
+
+    if output_format == "html":
+        return serialize_html_document(document)
+
+    blocks = extract_structural_blocks(document)
+    return render_blocks_as_markdown(blocks)
+
+
 class HTMLLoader:
     """
     Loads HTML files and returns one Document in markdown or html mode.
@@ -35,14 +56,7 @@ class HTMLLoader:
             raise FileNotFoundError(f"File not found: {self.file_path}")
 
         raw_bytes = path.read_bytes()
-        document = parse_html_document(raw_bytes)
-        strip_non_content_nodes(document)
-
-        if self.output_format == "html":
-            content = serialize_html_document(document)
-        else:
-            blocks = extract_structural_blocks(document)
-            content = render_blocks_as_markdown(blocks)
+        content = render_html_content(raw_bytes, output_format=self.output_format)
 
         metadata = {
             "source": self.file_path,
