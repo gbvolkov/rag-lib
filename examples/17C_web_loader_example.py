@@ -32,7 +32,7 @@ def run_sync_example(*, ignore_https_errors: bool) -> None:
     print(f"ignore_https_errors={ignore_https_errors}")
     loader = WebLoader(
         url=TARGET_URL,
-        depth=3,
+        depth=2,
         output_format="markdown",
         fetch_mode="requests",
         crawl_scope="allow_all",
@@ -54,7 +54,7 @@ async def run_async_example(*, ignore_https_errors: bool) -> None:
     print(f"ignore_https_errors={ignore_https_errors}")
     loader = AsyncWebLoader(
         url=TARGET_URL,
-        depth=3,
+        depth=2,
         output_format="markdown",
         fetch_mode="requests",
         crawl_scope="allow_all",

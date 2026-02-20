@@ -82,6 +82,14 @@ Method:
 - `HTMLLoader`
 - `WebLoader`
 - `AsyncWebLoader`
+- `WebCleanupConfig`
+- `WebLink`
+- `PlaywrightExtractionConfig`
+- `PlaywrightNavigationConfig`
+- `PlaywrightProfileConfig`
+- `build_sync_playwright_extractor`
+- `build_async_playwright_extractor`
+- `get_playwright_profile_defaults`
 - `SemanticChunker`
 - `HTMLSplitter`
 - `SegmentEnricher`
@@ -157,17 +165,133 @@ WebLoader(
     request_timeout_seconds: float = 20.0,
     playwright_timeout_ms: int = 30000,
     playwright_headless: bool = True,
+    ignore_https_errors: bool = False,
     user_agent: str = "rag-lib-webloader/1.0",
     max_pages: Optional[int] = None,
     retry_attempts: int = 1,
     continue_on_error: bool = True,
+    cleanup_config: Optional[WebCleanupConfig] = None,
+    custom_link_extractors: Optional[Sequence[Callable[[document, base_url], Sequence[WebLinkInput] | WebLinkInput | None]]] = None,
+    playwright_link_extractor: Optional[Callable[[page, base_url], Sequence[WebLinkInput] | WebLinkInput | None]] = None,
+    playwright_visible: Optional[bool] = None,
+    playwright_extraction_config: Optional[PlaywrightExtractionConfig] = None,
+    playwright_navigation_config: Optional[PlaywrightNavigationConfig] = None,
 )
 ```
 
-- Returns one `Document` per crawled HTML page.
-- Optional download routing (`follow_download_links=True`) routes to existing loaders.
-- Login callback is used only for Playwright retrieval and runs in the same browser context.
-- Exposes diagnostics in `last_errors` and `last_stats`.
+Behavior summary:
+
+- Inclusive depth model: start URL is depth `0`.
+- Regular/content links recurse to `depth + 1`.
+- Navigation links recurse at the same depth.
+- `non_recursive_classes` blocks regular links only (navigation links bypass this filter).
+- Returns one `Document` per crawled HTML page or per Playwright navigation state, depending on navigation mode.
+- Optional download routing (`follow_download_links=True`) routes downloadable responses to typed loaders.
+- Login callback runs only for Playwright requests and reuses the same browser context.
+- Diagnostics are available in `last_errors` and `last_stats`.
+
+Parameter reference:
+
+- `url`: crawl entrypoint.
+- `depth`: max inclusive depth. `0` means crawl only the entry URL.
+- `output_format`: rendered HTML output (`"markdown"` or `"html"`).
+- `fetch_mode`:
+  - `"requests"`: plain HTTP fetches only.
+  - `"requests_fallback_playwright"`: requests first, then Playwright fallback on fetch failure/401/403; parse fallback paths also use Playwright.
+  - `"playwright"`: browser-only fetch.
+- `crawl_scope`:
+  - `"same_host"`: exact host match.
+  - `"same_domain"`: registrable-domain match.
+  - `"allowed_domains"`: host must match `allowed_domains`.
+  - `"allow_all"`: no host restriction.
+- `allowed_domains`: host/domain allowlist when `crawl_scope="allowed_domains"`.
+- `login_url`: optional auth URL hint used to detect login pages.
+- `login_processor`: callback `(page, context, start_url, login_url, current_url) -> bool | None`.
+  - `False` means login failed.
+  - `True`/`None` means login flow accepted and crawl continues.
+- `follow_download_links`: if enabled, downloadable resources are routed to existing loaders.
+- `request_timeout_seconds`: per-request timeout for requests backend.
+- `playwright_timeout_ms`: page navigation timeout for Playwright.
+- `playwright_headless`: Playwright browser mode.
+- `ignore_https_errors`: disables TLS cert validation in requests backend and sets Playwright `ignore_https_errors=True` (insecure workaround).
+- `user_agent`: requests and Playwright user-agent value.
+- `max_pages`: optional hard limit for number of visited URLs.
+- `retry_attempts`: retry count per URL and backend.
+- `continue_on_error`:
+  - `True`: keep crawling and record errors.
+  - `False`: raise on first recoverable failure.
+- `cleanup_config`: optional content cleanup/link-filter pipeline:
+  - `ignored_classes`: remove matching nodes before render/extraction.
+  - `non_recursive_classes`: skip recursion for regular links with matching source classes.
+  - `navigation_classes`: class-based navigation sources.
+  - `navigation_styles`: style-snippet navigation sources.
+  - `navigation_texts`: text-marker navigation sources (for example `"<"`, `">"`, `"next"`).
+  - `duplicate_tags`: tag names participating in global duplicate filtering.
+- `custom_link_extractors`: parsed-DOM callbacks run after cleanup.
+- `playwright_link_extractor`: legacy Playwright page callback.
+- `playwright_visible`: alias for headful mode (`True` forces `playwright_headless=False`).
+- `playwright_extraction_config`: declarative Playwright extraction profile chain.
+- `playwright_navigation_config`: generic Playwright navigation runner config.
+
+Supporting config parameter reference:
+
+- `WebLinkInput` accepted by custom/playwright extractors:
+  - `str`: URL.
+  - `WebLink`: structured URL + metadata.
+  - `tuple[str, Sequence[str]]`: URL + source classes.
+- `PlaywrightExtractionConfig` fields:
+  - `profiles`: ordered `PlaywrightProfileConfig` sequence.
+  - `continue_on_error`: if `True`, profile errors are recorded and execution continues.
+  - `max_profile_runtime_ms`: optional wall-clock cap for full profile chain.
+- `PlaywrightProfileConfig` fields:
+  - `profile`: extraction mode (`anchors`, `attributes`, `onclick_regex`, `eval`, `paginated_eval`).
+  - `selectors`: CSS selectors for profile modes that read elements.
+  - `attributes`: attribute names used by `attributes`/`onclick_regex`.
+  - `regex_pattern`: regex for `onclick_regex` value extraction.
+  - `url_template`: interpolation template for regex captures (`{value}` default).
+  - `script`: JavaScript for `eval`.
+  - `script_args`: script argument payload.
+  - `seed_script`: optional pre-loop script for `paginated_eval`.
+  - `next_page_script`: optional page-advance script for `paginated_eval`.
+  - `extract_script`: required extraction script for `paginated_eval`.
+  - `max_pages`: max iterations for `paginated_eval`.
+  - `wait_after_action_ms`: wait after script actions/page changes.
+  - `include_url_patterns`: allowlist regex patterns applied to extracted URLs.
+  - `exclude_url_patterns`: denylist regex patterns applied to extracted URLs.
+  - `is_navigation`: marks extracted links as same-depth navigation links.
+  - `source_tag`: metadata tag hint for extracted links.
+  - `source_classes`: metadata class tokens for extracted links.
+- `PlaywrightNavigationConfig` fields:
+  - `enabled`: enable/disable generic cleanup-driven navigation runner.
+  - `max_clicks`: max click attempts per page.
+  - `max_states`: max captured states per page.
+  - `wait_after_click_ms`: settle wait after a successful click.
+  - `state_change_timeout_ms`: timeout waiting for content hash change.
+  - `state_poll_interval_ms`: poll interval while waiting for state change.
+  - `max_no_change_clicks`: stop after this many no-change clicks.
+  - `clickable_selectors`: candidate selectors for click targets.
+  - `forward_text_markers`: preferred forward labels/tokens.
+  - `backward_text_markers`: de-prioritized backward labels/tokens.
+  - `content_ready_selectors`: optional readiness selectors checked after change.
+  - `navigation_state_document_mode`: state rendering mode (`separate_documents` or `single_document`).
+
+Metadata and diagnostics produced by web crawl:
+
+- HTML docs: `source`, `source_type="web"`, `output_format`, `web_depth`, `parent_url`, `fetch_backend`, `start_url`.
+- Navigation-state docs also include `web_navigation_state_index`, `web_navigation_state_count`, `web_navigation_click_count`, `web_navigation_state_hash`, and `canonical_source`.
+- Download-routed docs include `source_type="web_download"`, `download_content_type`, `download_filename`, `routed_loader`.
+- `last_stats` keys: `visited_count`, `success_count`, `error_count`, `skipped_count`, `max_depth_reached`.
+- `last_errors` entries include `stage` (`fetch`, `parse`, `download`, `auth`, `filter`) and backend details.
+
+Playwright extraction behavior:
+
+- Without `playwright_extraction_config`:
+  - link discovery is mostly HTML-anchor based (`<a href>`) plus optional legacy callback.
+  - useful for static pages and standard links.
+- With `playwright_extraction_config`:
+  - profile chain runs first, then `playwright_link_extractor`.
+  - links are merged/deduped and can carry `is_navigation`, `source_tag`, `source_classes`.
+  - supports dynamic extraction strategies (`attributes`, `onclick_regex`, `eval`, `paginated_eval`).
 
 #### `AsyncWebLoader` (`rag_lib.loaders.web_async`)
 
@@ -185,16 +309,90 @@ AsyncWebLoader(
     request_timeout_seconds: float = 20.0,
     playwright_timeout_ms: int = 30000,
     playwright_headless: bool = True,
+    ignore_https_errors: bool = False,
     user_agent: str = "rag-lib-webloader/1.0",
     max_pages: Optional[int] = None,
     retry_attempts: int = 1,
     max_concurrency: int = 5,
     continue_on_error: bool = True,
+    cleanup_config: Optional[WebCleanupConfig] = None,
+    custom_link_extractors: Optional[Sequence[Callable[[document, base_url], Awaitable[Sequence[WebLinkInput]] | Sequence[WebLinkInput] | WebLinkInput | Awaitable[WebLinkInput] | None]]] = None,
+    playwright_link_extractor: Optional[Callable[[page, base_url], Awaitable[Sequence[WebLinkInput]] | Sequence[WebLinkInput] | WebLinkInput | Awaitable[WebLinkInput] | None]] = None,
+    playwright_visible: Optional[bool] = None,
+    playwright_extraction_config: Optional[PlaywrightExtractionConfig] = None,
+    playwright_navigation_config: Optional[PlaywrightNavigationConfig] = None,
 )
 ```
 
-- Async counterpart with bounded concurrency and retry control.
-- Supports the same fetch modes, crawl scopes, download routing, and diagnostics as `WebLoader`.
+Async-specific behavior:
+
+- Same parameters and semantics as `WebLoader`, except:
+  - `login_processor` may be sync or async.
+  - `custom_link_extractors` and `playwright_link_extractor` may be sync or async.
+  - `max_concurrency` controls concurrent URL processing.
+- Crawl execution uses depth waves:
+  - process current depth concurrently;
+  - exhaust same-depth navigation waves;
+  - then advance to `depth + 1` with regular links.
+
+Examples:
+
+1. Basic static crawl (`requests` only):
+
+```python
+loader = WebLoader(
+    url="https://example.com",
+    depth=1,
+    fetch_mode="requests",
+    output_format="markdown",
+)
+docs = loader.load()
+```
+
+2. Requests first, Playwright fallback, cleanup rules:
+
+```python
+loader = WebLoader(
+    url="https://quotes.toscrape.com",
+    depth=2,
+    fetch_mode="requests_fallback_playwright",
+    cleanup_config=WebCleanupConfig(
+        non_recursive_classes=("tag",),
+        navigation_classes=("pager",),
+        ignored_classes=("footer",),
+    ),
+)
+docs = loader.load()
+```
+
+3. Playwright extraction profiles enabled (dynamic links):
+
+```python
+profile = PlaywrightProfileConfig(
+    profile="attributes",
+    selectors=("[data-url]",),
+    attributes=("data-url",),
+)
+loader = AsyncWebLoader(
+    url="https://site-with-js-links.example",
+    depth=1,
+    fetch_mode="playwright",
+    playwright_extraction_config=PlaywrightExtractionConfig(profiles=(profile,)),
+)
+docs = await loader.load()
+```
+
+4. Playwright extraction disabled (default):
+
+```python
+loader = AsyncWebLoader(
+    url="https://site-with-js-links.example",
+    depth=1,
+    fetch_mode="playwright",
+)
+# This path relies on HTML anchors and cleanup/navigation signals only.
+docs = await loader.load()
+```
 
 #### `CSVLoader` (`rag_lib.loaders.csv_excel`)
 
@@ -302,6 +500,50 @@ MinerULoader(
 ```python
 SchemaDialect = {"dot_path"}
 ```
+
+#### Web crawl literals (`rag_lib.loaders.web`, `rag_lib.loaders.web_async`)
+
+```python
+FetchMode = {"requests", "requests_fallback_playwright", "playwright"}
+CrawlScope = {"same_host", "same_domain", "allowed_domains", "allow_all"}
+output_format = {"markdown", "html"}  # for WebLoader/AsyncWebLoader/HTMLLoader
+```
+
+#### Playwright extraction literals (`rag_lib.loaders.web_playwright_extractors`)
+
+```python
+PlaywrightProfileName = {"anchors", "attributes", "onclick_regex", "eval", "paginated_eval"}
+NavigationStateDocumentMode = {"separate_documents", "single_document"}
+```
+
+`PlaywrightProfileName` value meaning:
+
+- `anchors`: extract URLs from selected anchors (`href`).
+- `attributes`: extract URLs from configured attributes (for example `data-url`, `data-href`).
+- `onclick_regex`: extract URL-like values from attributes/text via regex.
+- `eval`: evaluate one custom JavaScript extraction script.
+- `paginated_eval`: iterative extraction across pages/states via `seed_script`, `extract_script`, `next_page_script`.
+
+`NavigationStateDocumentMode` value meaning:
+
+- `separate_documents`: emit one `Document` per captured navigation state (`#nav-state=N` source suffix).
+- `single_document`: merge all captured states into one combined document.
+
+#### Download routing kinds (internal mapping in `web_common`)
+
+```python
+download_kind = {"pdf", "docx", "html", "csv", "xlsx", "json", "txt"}
+```
+
+Default routed loaders by kind:
+
+- `pdf` -> `PDFLoader` (fallback: `PyMuPDFLoader`)
+- `docx` -> `DocXLoader`
+- `html` -> `HTMLLoader`
+- `csv` -> `CSVLoader`
+- `xlsx` -> `ExcelLoader`
+- `json` -> `JsonLoader`
+- `txt` -> `TextLoader`
 
 ## 5. Chunkers and Splitters (`rag_lib.chunkers`)
 

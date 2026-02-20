@@ -32,6 +32,17 @@ AsyncPlaywrightStateCallback = Callable[
 
 @dataclass(frozen=True)
 class PlaywrightProfileConfig:
+    """
+    One declarative link-extraction profile executed on a Playwright page.
+
+    The required fields depend on `profile`:
+    - anchors: `selectors` optional (defaults to `("a[href]",)`).
+    - attributes: requires `selectors` and `attributes`.
+    - onclick_regex: requires `selectors` and `regex_pattern` (and usually `attributes`).
+    - eval: requires `script`.
+    - paginated_eval: requires `extract_script`; optional `seed_script` and `next_page_script`.
+    """
+
     profile: PlaywrightProfileName
     selectors: Sequence[str] = ()
     attributes: Sequence[str] = ()
@@ -53,6 +64,8 @@ class PlaywrightProfileConfig:
 
 @dataclass(frozen=True)
 class PlaywrightExtractionConfig:
+    """Ordered chain of Playwright extraction profiles with error and runtime controls."""
+
     profiles: Sequence[PlaywrightProfileConfig] = ()
     continue_on_error: bool = True
     max_profile_runtime_ms: int | None = None
@@ -60,6 +73,13 @@ class PlaywrightExtractionConfig:
 
 @dataclass(frozen=True)
 class PlaywrightNavigationConfig:
+    """
+    Generic cleanup-driven Playwright navigation settings.
+
+    Controls how pagination/navigation controls are clicked, how state changes are detected,
+    and whether multiple navigation states are emitted as separate or merged documents.
+    """
+
     enabled: bool = True
     max_clicks: int = 20
     max_states: int = 25
@@ -76,6 +96,8 @@ class PlaywrightNavigationConfig:
 
 @dataclass(frozen=True)
 class PlaywrightNavigationState:
+    """One captured post-click page state used for document rendering and additional link extraction."""
+
     html: str
     content_hash: str
     click_count: int = 0
@@ -85,6 +107,8 @@ class PlaywrightNavigationState:
 
 @dataclass(frozen=True)
 class PlaywrightNavigationRunResult:
+    """Navigation runner output containing discovered states, click count, and non-fatal diagnostics."""
+
     states: tuple[PlaywrightNavigationState, ...] = ()
     click_count: int = 0
     errors: tuple[str, ...] = ()

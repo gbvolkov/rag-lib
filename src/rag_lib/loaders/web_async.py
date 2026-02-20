@@ -69,9 +69,23 @@ class _ProcessResult:
 
 class AsyncWebLoader:
     """
-    Asynchronous web crawler loader.
-    Returns one Document per crawled HTML page.
-    Optionally routes downloadable links through existing file loaders.
+    Asynchronous recursive web crawler with bounded concurrency and the same feature surface as
+    `WebLoader` (cleanup filters, Playwright extraction/navigation, download routing, diagnostics).
+
+    Depth semantics are inclusive:
+    - start URL is depth `0`;
+    - regular/content links recurse to `depth + 1`;
+    - navigation links recurse at the same depth;
+    - `non_recursive_classes` applies to regular links only.
+
+    Async traversal processes each depth in waves:
+    - same-depth navigation waves are exhausted first;
+    - regular links advance to the next depth frontier.
+
+    Diagnostics:
+    - `last_errors`: list of fetch/parse/auth/download/filter diagnostics;
+    - `last_stats`: aggregate crawl counters (`visited_count`, `success_count`, `error_count`,
+      `skipped_count`, `max_depth_reached`).
     """
 
     def __init__(
@@ -118,6 +132,46 @@ class AsyncWebLoader:
         playwright_extraction_config: PlaywrightExtractionConfig | None = None,
         playwright_navigation_config: PlaywrightNavigationConfig | None = None,
     ):
+        """
+        Initialize an asynchronous web crawler.
+
+        Args:
+            url: Start URL.
+            depth: Inclusive crawl depth (0 means only start URL).
+            output_format: Rendered HTML document format (`"markdown"` or `"html"`).
+            fetch_mode:
+                - `"requests"`: HTTP client only.
+                - `"requests_fallback_playwright"`: requests first; fallback to Playwright on fetch
+                  failures/401/403 and on parse fallback paths.
+                - `"playwright"`: browser-only retrieval.
+            crawl_scope:
+                - `"same_host"`: exact hostname match with start URL.
+                - `"same_domain"`: registrable domain match.
+                - `"allowed_domains"`: host must match `allowed_domains`.
+                - `"allow_all"`: no host restriction.
+            allowed_domains: Domain allowlist used when `crawl_scope="allowed_domains"`.
+            login_url: Optional login URL hint used for login trigger detection.
+            login_processor: Optional callback run in shared async Playwright context when auth is required.
+                Signature: `(page, context, start_url, login_url, current_url) -> Awaitable[bool | None] | bool | None`.
+            follow_download_links: Route downloadable responses through file loaders when true.
+            request_timeout_seconds: Per-request timeout for requests backend.
+            playwright_timeout_ms: Playwright navigation timeout for page loads.
+            playwright_headless: Playwright headless mode.
+            ignore_https_errors: Disables TLS certificate verification for requests backend and enables
+                Playwright `ignore_https_errors`. Use only as an insecure workaround.
+            user_agent: User-Agent header/browser context value.
+            max_pages: Optional cap on visited URLs.
+            retry_attempts: Retry count for each fetch attempt (0 means single attempt).
+            max_concurrency: Maximum concurrent in-flight URL processing tasks.
+            continue_on_error: Continue crawl on recoverable errors; otherwise raise immediately.
+            cleanup_config: Optional DOM cleanup/link-filter config.
+            custom_link_extractors: Extra parsed-DOM extractors run after cleanup.
+            playwright_link_extractor: Legacy Playwright extractor callback.
+            playwright_visible: Convenience alias for headful Playwright (`True` forces `playwright_headless=False`).
+            playwright_extraction_config: Declarative Playwright profile chain executed before
+                `playwright_link_extractor`.
+            playwright_navigation_config: Generic Playwright navigation runner settings.
+        """
         if not url:
             raise ValueError("url must be non-empty")
         if depth < 0:

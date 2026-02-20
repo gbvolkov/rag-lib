@@ -63,6 +63,18 @@ _KIND_TO_EXTENSION = {
 
 @dataclass(frozen=True)
 class WebCleanupConfig:
+    """
+    Cleanup and link-discovery rules applied to parsed HTML before rendering.
+
+    Attributes:
+        ignored_classes: Elements matching these class rules are removed before rendering and link extraction.
+        non_recursive_classes: Regular links originating from elements with these classes are not recursively crawled.
+        navigation_classes: Elements matching these class rules are treated as navigation sources.
+        navigation_styles: Elements with inline styles containing these normalized snippets are treated as navigation sources.
+        navigation_texts: Exact normalized text markers for navigation controls (for example '<', '>', 'next').
+        duplicate_tags: Tag names that participate in cross-page duplicate removal based on stable content signatures.
+    """
+
     ignored_classes: Sequence[str] = ()
     non_recursive_classes: Sequence[str] = ()
     navigation_classes: Sequence[str] = ()
@@ -73,6 +85,16 @@ class WebCleanupConfig:
 
 @dataclass(frozen=True)
 class WebLink:
+    """
+    Normalized crawl candidate produced by HTML/custom/playwright extractors.
+
+    Attributes:
+        url: Absolute HTTP(S) URL.
+        source_classes: Source element class tokens used for filters like non_recursive_classes.
+        is_navigation: Marks same-depth traversal candidates.
+        source_tag: Source element local tag name or extractor tag hint.
+    """
+
     url: str
     source_classes: tuple[str, ...] = ()
     is_navigation: bool = False
