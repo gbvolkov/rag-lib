@@ -30,7 +30,10 @@ pip install -e .
 - `rag-lib[graph]`: Neo4j graph backend support
 - `rag-lib[raptor]`: RAPTOR clustering dependencies
 - `rag-lib[pymupdf]`: PyMuPDF markdown/html loader support
-- `rag-lib[web]`: Playwright browser backend for WebLoader/AsyncWebLoader
+- `rag-lib[web]`: Playwright browser backend for WebLoader/AsyncWebLoader (compatibility extra)
+
+Note: `playwright` is currently included in base project dependencies (`pyproject.toml`).
+The `web` extra remains as a compatibility/convenience extra.
 
 Example:
 
@@ -96,7 +99,7 @@ Method:
 
 ## 4. Loaders (`rag_lib.loaders`)
 
-All loaders return `List[langchain_core.documents.Document]`.
+All concrete loader classes listed below return `List[langchain_core.documents.Document]`.
 
 ### 4.1 Signatures and return behavior
 
@@ -1056,8 +1059,8 @@ ClusterSummarizer(
 
 Methods:
 
-- `summarize(texts: List[str], target_language="english", max_chars=1200, target_ratio=0.35) -> str`
-- `asummarize(...) -> str`
+- `summarize(texts: List[str], *, target_language="english", max_chars=1200, target_ratio=0.35) -> str`
+- `asummarize(texts: List[str], *, target_language="english", max_chars=1200, target_ratio=0.35) -> str`
 
 #### `TreeBuilder`
 
