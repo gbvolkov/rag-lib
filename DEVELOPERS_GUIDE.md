@@ -5,7 +5,7 @@ This guide is aligned to the current code in `src/rag_lib`.
 ## 1. Version and Runtime
 
 - Package name: `rag-lib`
-- Current project version (`pyproject.toml`): `0.2.1`
+- Current project version (`pyproject.toml`): `0.2.2`
 - Supported Python: `>=3.12,<3.14`
 
 To check installed package version:
@@ -1115,9 +1115,93 @@ After hierarchy finalization additional keys may include:
 
 Notable defaults:
 
+- `llm.provider = "openai"`
+- `llm.model = "base"`
+- `llm.temperature = 0.0`
+- `embeddings.provider = "openai"`
+- `embeddings.model_name = None` (factory default for OpenAI becomes `"text-embedding-3-small"`)
+- `vector_store.provider = "chroma"`
+- `vector_store.collection_name = "rag_lib_collection"`
+- `vector_store.path = "./chroma_db"`
 - `ingestion.chunk_size = 100`
 - `ingestion.semantic_threshold = 0.6`
 - `ingestion.default_pdf_backend = "poppler"`
+
+### 11.1 Factory Providers and Backends
+
+#### `create_vector_store` (`rag_lib.vectors.factory`)
+
+```python
+create_vector_store(
+    provider: str = "chroma",
+    embeddings: Optional[Embeddings] = None,
+    collection_name: str = "rag_collection",
+    connection_uri: Optional[str] = None,
+    cleanup: bool = True,
+) -> VectorStore
+```
+
+Provider/backends implemented:
+
+- `chroma`:
+  - uses `langchain_chroma.Chroma`
+  - persistent directory: `Settings().vector_store.path` (fallback `./chroma_db`)
+  - sets collection cosine space and strict relevance mapping
+  - optional collection cleanup (`delete_collection`) before returning store
+- `faiss`:
+  - uses `langchain_community.vectorstores.FAISS`
+  - initializes via `FAISS.from_texts([""], embeddings)` (current bootstrap behavior)
+- `qdrant`:
+  - uses `langchain_qdrant.Qdrant`
+  - `connection_uri=None` -> in-memory (`location=":memory:"`)
+  - with URI -> `Qdrant.from_existing_collection(..., url=connection_uri)`
+- `postgres`:
+  - uses `langchain_postgres.PGVector`
+  - requires `connection_uri`
+
+Unknown provider raises `ValueError("Unknown Vector Store provider: ...")`.
+
+#### `create_embeddings_model` (`rag_lib.embeddings.factory`)
+
+```python
+create_embeddings_model(
+    provider: Optional[str] = None,
+    model_name: Optional[str] = None,
+) -> Embeddings
+```
+
+Provider values:
+
+- `openai`
+- `local` (alias of HuggingFace local model)
+- `huggingface`
+
+`rag_lib.embeddings.mock` also provides:
+
+- `MockEmbeddings(dimension: int = 4)` for deterministic/offline tests.
+
+#### `create_llm` (`rag_lib.llm.factory`)
+
+```python
+create_llm(
+    model_name: Optional[str] = None,
+    provider: Optional[str] = None,
+    temperature: Optional[float] = None,
+    frequency_penalty: Optional[float] = None,
+    *,
+    streaming: bool = True,
+    callbacks: Optional[Sequence[BaseCallbackHandler]] = None,
+) -> BaseChatModel
+```
+
+Provider values:
+
+- `openai`
+- `openai_think`
+- `openai_4`
+- `openai_pers`
+- `mistral`
+- `yandex`
 
 ## 12. Corrected Usage Examples
 
@@ -1191,3 +1275,219 @@ docs = retriever.invoke("query")
 - `RegexHierarchyLoader` is now a raw text loader; hierarchical splitting belongs to `RegexHierarchySplitter` / `MarkdownHierarchySplitter`.
 - `HTMLLoader` and `HTMLSplitter` are strict (no fallback behavior for malformed input).
 - `rag_lib.__version__` is not defined in package code; use `importlib.metadata.version("rag-lib")`.
+
+## 14. Source-Validated Coverage Addendum
+
+This section lists additional implemented APIs to ensure full source coverage.
+
+### 14.1 Core Storage and Index Build APIs
+
+#### `IndexBuilder` (`rag_lib.core.index_builder`)
+
+```python
+IndexBuilder(vector_store: VectorStore, doc_store: BaseStore[str, Segment])
+```
+
+- `build(segments: List[Segment], batch_size: int = 100) -> None`
+- `abuild(segments: List[Segment], batch_size: int = 100) -> None`
+
+#### Stores (`rag_lib.core.store`)
+
+```python
+JsonFileStore(file_path: str)
+LocalPickleStore(file_path: str)
+```
+
+Both implement:
+
+- `mget(keys: Sequence[str])`
+- `mset(key_value_pairs: Sequence[Tuple[str, Segment]])`
+- `mdelete(keys: Sequence[str])`
+- `yield_keys(prefix: Optional[str] = None)`
+
+#### Logger helper (`rag_lib.core.logger`)
+
+- `setup_logger(name: str = "rag_lib") -> logging.Logger`
+
+### 14.2 Additional Chunking Utilities
+
+#### Language detection (`rag_lib.chunkers.language`)
+
+- `detect_nltk_language(text: str, default: str = "english") -> str`
+- `resolve_nltk_language(language: Optional[str], text: str, default: str = "english") -> str`
+
+#### Table-row utilities (`rag_lib.chunkers.table_rows`)
+
+Data classes:
+
+- `ParsedTable`
+- `TableRowChunk`
+
+Functions:
+
+- `detect_csv_delimiter(text: str, fallback: str = ",") -> str`
+- `parse_csv_table(...) -> tuple[ParsedTable, str]`
+- `render_csv_table(...) -> str`
+- `parse_markdown_table(...) -> ParsedTable`
+- `render_markdown_table(...) -> str`
+- `chunk_table_rows(...) -> List[TableRowChunk]`
+- `build_summary_content(...) -> str`
+
+### 14.3 HTML Processing Utilities (`rag_lib.html_processing`)
+
+Data class:
+
+- `HTMLBlock`
+
+Public functions:
+
+- `parse_html_document(content)`
+- `strip_non_content_nodes(document)`
+- `serialize_html_document(document)`
+- `extract_structural_blocks(document)`
+- `render_blocks_as_markdown(blocks)`
+- `render_blocks_as_html(blocks)`
+- `parse_html_table_element(table_element, use_first_row_as_header=True)`
+- `render_html_table(header, rows)`
+
+### 14.4 Data + Web Utility APIs
+
+#### Data helpers (`rag_lib.loaders.data_loaders`)
+
+- `select_schema_target(data, schema=".", schema_dialect=SchemaDialect.DOT_PATH) -> Tuple[bool, Any]`
+- `iter_json_leaf_paths(value, path=()) -> Iterator[Tuple[Tuple[str, ...], Any]]`
+- `render_json_as_markdown(value) -> str`
+
+#### HTML loader helper (`rag_lib.loaders.html`)
+
+- `render_html_content(content, output_format="markdown") -> str`
+
+#### Web common helpers (`rag_lib.loaders.web_common`)
+
+- `normalize_url`
+- `normalize_content_type`
+- `get_header`
+- `is_http_url`
+- `url_extension`
+- `is_html_content_type`
+- `is_html_response`
+- `parse_web_html_document`
+- `resolve_absolute_links`
+- `normalize_web_link_input`
+- `merge_web_links`
+- `partition_web_links`
+- `cleanup_and_extract_web_links`
+- `normalize_html_for_processing`
+- `render_web_html_document`
+- `render_web_html_content`
+- `is_url_in_scope`
+- `resolve_download_filename`
+- `infer_download_kind`
+- `is_download_response`
+- `route_download_content_to_documents`
+
+#### Playwright extraction utilities (`rag_lib.loaders.web_playwright_extractors`)
+
+Additional dataclasses:
+
+- `PlaywrightNavigationState`
+- `PlaywrightNavigationRunResult`
+
+Additional helpers:
+
+- `compose_sync_playwright_link_extractors(extractors)`
+- `compose_async_playwright_link_extractors(extractors)`
+- `run_sync_playwright_extraction(config, page, base_url)`
+- `run_async_playwright_extraction(config, page, base_url)` (async)
+- `run_sync_cleanup_navigation(...)`
+- `run_async_cleanup_navigation(...)` (async)
+
+### 14.5 Additional Retrieval and Graph APIs
+
+#### Reranker implementations (`rag_lib.retrieval.cross_encoder_reranker_with_score`)
+
+- `CrossEncoderRerankerWithScores`
+- `TournamentCrossEncoderReranker`
+
+#### Additional graph retriever classes (`rag_lib.retrieval.graph_retriever`)
+
+- `GraphRetrieverError` (base exception)
+- `GraphConfigurationError`
+- `GraphCapabilityError`
+- `GraphDataError`
+- `KeywordTiers` (dataclass with `high_level_keywords`, `low_level_keywords`)
+
+#### Graph store model (`rag_lib.graph.store`)
+
+- `GraphExpansionResult` (`nodes`, `edges`, `hop_by_node`)
+
+#### Graph community API (`rag_lib.graph.community`)
+
+- `CommunityDetector.detect(store: NetworkXGraphStore) -> Dict[int, List[str]]`
+
+#### Base graph store capability surface (`rag_lib.graph.store.BaseGraphStore`)
+
+Sync methods:
+
+- `add_node`, `add_edge`, `get_node`, `get_neighbors`, `search_nodes`
+- `search_nodes_hybrid`, `search_edges_hybrid`
+- `expand_subgraph`
+- `get_community_summaries`
+- `get_source_segment_ids_for_entities`, `get_source_segment_ids_for_edges`
+- `get_node_prior`, `get_edge_prior`
+
+Async counterparts:
+
+- `aadd_node`, `aadd_edge`, `aget_node`, `aget_neighbors`, `asearch_nodes`
+- `asearch_nodes_hybrid`, `asearch_edges_hybrid`
+- `aexpand_subgraph`
+- `aget_community_summaries`
+- `aget_source_segment_ids_for_entities`, `aget_source_segment_ids_for_edges`
+- `aget_node_prior`, `aget_edge_prior`
+
+`NetworkXGraphStore` adds persistence helpers:
+
+- `save_to_file(path: str)`
+- `load_from_file(path: str)`
+
+### 14.6 Table Summarization APIs (`rag_lib.summarizers`)
+
+`rag_lib.summarizers.table`:
+
+- `TableSummarizer` (Protocol)
+- `MockTableSummarizer`
+- `LLMTableSummarizer` (legacy skeleton implementation)
+
+`rag_lib.summarizers.table_llm`:
+
+- `LLMTableSummarizer(llm, prompt_template=None, soft_max_chars=None)`
+- `summarize(markdown_table) -> str`
+- `asummarize(markdown_table) -> str`
+
+### 14.7 Package Export Surfaces
+
+`rag_lib.chunkers` lazy exports:
+
+- `CSVTableSplitter`
+- `HTMLSplitter`
+
+`rag_lib.processors` exports:
+
+- `SegmentEnricher`
+- `EntityExtractor`
+- `CommunitySummarizer`
+- `RaptorProcessor` (lazy export via `__getattr__`)
+
+`rag_lib.loaders` exports:
+
+- `HTMLLoader`
+- `WebLoader`
+- `AsyncWebLoader`
+- `WebCleanupConfig`
+- `WebLink`
+- `PlaywrightExtractionConfig`
+- `PlaywrightNavigationConfig`
+- `PlaywrightProfileConfig`
+- `build_sync_playwright_extractor`
+- `build_async_playwright_extractor`
+- `get_playwright_profile_defaults`
