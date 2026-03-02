@@ -1,6 +1,6 @@
 [project]
 name = "rag-lib"
-version = "0.2.3"
+version = "0.2.4"
 description = "Advanced RAG Library for Ingestion, Segmentation, and Indexing"
 authors = [
     { name = "User", email = "user@example.com" }
