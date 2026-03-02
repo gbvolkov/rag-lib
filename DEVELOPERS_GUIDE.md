@@ -5,7 +5,7 @@ This guide is aligned to the current code in `src/rag_lib`.
 ## 1. Version and Runtime
 
 - Package name: `rag-lib`
-- Current project version (`pyproject.toml`): `0.2.2`
+- Current project version (`pyproject.toml`): `0.2.3`
 - Supported Python: `>=3.12,<3.14`
 
 To check installed package version:
@@ -31,6 +31,7 @@ pip install -e .
 - `rag-lib[raptor]`: RAPTOR clustering dependencies
 - `rag-lib[pymupdf]`: PyMuPDF markdown/html loader support
 - `rag-lib[web]`: Playwright browser backend for WebLoader/AsyncWebLoader (compatibility extra)
+- `rag-lib[dev]`: test tooling (`pytest`, `pytest-cov`)
 
 Note: `playwright` is currently included in base project dependencies (`pyproject.toml`).
 The `web` extra remains as a compatibility/convenience extra.
@@ -438,6 +439,7 @@ RegexHierarchyLoader(
 
 - Current behavior: loader returns raw file text as a single `Document`.
 - Hierarchical splitting is done by `RegexHierarchySplitter`, not this loader.
+- Backward-compat helper is present: `load_str(text: str) -> List[Document]`.
 
 #### `TableLoader` (`rag_lib.loaders.data_loaders`)
 
@@ -855,6 +857,10 @@ create_graph_hybrid_retriever(
     weights: List[float] = [0.7, 0.3],
 ) -> EnsembleRetriever
 ```
+
+Behavior note:
+
+- `create_dual_storage_retriever(...)` currently builds `MultiVectorRetriever` with fixed `search_type="similarity_score_threshold"` and `search_kwargs` passthrough.
 
 ### 7.3 `ScoredMultiVectorRetriever` enums and defaults (`scored_retriever.py`)
 
@@ -1421,6 +1427,13 @@ Additional helpers:
 
 - `GraphExpansionResult` (`nodes`, `edges`, `hop_by_node`)
 
+#### Neo4j graph store (`rag_lib.graph.neo4j_store`)
+
+- `Neo4jGraphStore(uri: str, auth: tuple[str, str], database: str = "neo4j")`
+- `close()`
+- Sync API: `add_node`, `add_edge`, `get_node`, `get_neighbors`, `search_nodes`
+- Async API: `aadd_node`, `aadd_edge`, `aget_node`, `aget_neighbors`, `asearch_nodes`
+
 #### Graph community API (`rag_lib.graph.community`)
 
 - `CommunityDetector.detect(store: NetworkXGraphStore) -> Dict[int, List[str]]`
@@ -1491,3 +1504,82 @@ Async counterparts:
 - `build_sync_playwright_extractor`
 - `build_async_playwright_extractor`
 - `get_playwright_profile_defaults`
+
+## 15. External API Boundary Recommendations
+
+This section defines a recommended exposure boundary when implementing a public-facing API layer (for example `rag-api`) on top of `rag_lib`.
+
+### 15.1 Exposure levels
+
+- **Public HTTP API**: stable, JSON-serializable contracts only.
+- **Public SDK API**: Python-facing API where typed objects/classes/factories are acceptable.
+- **Internal-only**: implementation detail; do not document as external contract.
+
+### 15.2 Boundary matrix (`rag_lib` -> external API)
+
+| rag_lib module | Feature / surface | Public HTTP API | Public SDK API | Internal-only | Recommended API action |
+| --- | --- | --- | --- | --- | --- |
+| `core.domain` | `Segment`, `SegmentType` | Yes | Yes | No | Use strict schema validation; remove coercions. |
+| `core.indexer` | `Indexer` | No (direct class API) | Yes | No | Use as primary indexing path. |
+| `core.index_builder` | `IndexBuilder` | No | No | Yes | Keep internal; avoid external contract exposure. |
+| `core.store` | `JsonFileStore`, `LocalPickleStore` | No | Optional (advanced/debug SDK only) | Yes | No HTTP exposure required. |
+| `loaders.csv_excel` | `CSVLoader`, `ExcelLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.data_loaders` | `JsonLoader`, `SchemaDialect`, `TableLoader`, `TextLoader` | Yes | Yes | No | Keep loaders + strict `SchemaDialect` enums. |
+| `loaders.data_loaders` | `select_schema_target`, `iter_json_leaf_paths`, `render_json_as_markdown` | No | Optional (advanced SDK) | Yes | Keep helpers internal by default. |
+| `loaders.docx` | `DocXLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.html` | `HTMLLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.html` | `render_html_content` | No | Optional | Yes | Treat as helper, not HTTP contract. |
+| `loaders.miner_u` | `MinerULoader` | Yes | Yes | No | Keep strict behavior; do not add silent PDF fallbacks in API layer. |
+| `loaders.pdf` | `PDFLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.pymupdf` | `PyMuPDFLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.regex` | `RegexHierarchyLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.web` | `WebLoader` | Yes | Yes | No | Keep high-level parity; expose only serializable options in HTTP. |
+| `loaders.web_async` | `AsyncWebLoader` | Yes | Yes | No | Same as sync web loader. |
+| `loaders.web`/`loaders.web_async` | callback params (`login_processor`, `custom_link_extractors`, `playwright_link_extractor`) | No | Optional (advanced SDK) | Yes | Keep callback injection out of HTTP contract. |
+| `loaders.web_common` | `WebCleanupConfig`, `WebLink` | Yes | Yes | No | Expose as stable config/data models. |
+| `loaders.web_common` | helper functions (`cleanup_and_extract_web_links`, `normalize_url`, etc.) | No | Optional | Yes | Keep helper surface internal by default. |
+| `loaders.web_playwright_extractors` | `PlaywrightExtractionConfig`, `PlaywrightNavigationConfig`, `PlaywrightProfileConfig`, `get_playwright_profile_defaults` | Yes | Yes | No | Expose as stable Playwright config layer. |
+| `loaders.web_playwright_extractors` | `build_sync_playwright_extractor`, `build_async_playwright_extractor` | No | Yes | No | SDK-only convenience builders; avoid HTTP exposure. |
+| `loaders.web_playwright_extractors` | low-level runners/composers (`compose_*`, `run_*`) | No | Optional (advanced SDK) | Yes | Treat as internal orchestration APIs. |
+| `chunkers.recursive` | `RecursiveCharacterTextSplitter` | Yes | Yes | No | Keep; represent options as serializable config in HTTP. |
+| `chunkers.token` | `TokenTextSplitter` | Yes | Yes | No | Keep; represent options as serializable config in HTTP. |
+| `chunkers.sentence` | `SentenceSplitter` | Yes | Yes | No | Keep; represent options as serializable config in HTTP. |
+| `chunkers.regex` | `RegexSplitter` | Yes | Yes | No | Keep; represent options as serializable config in HTTP. |
+| `chunkers.regex_hierarchy` | `RegexHierarchySplitter` | Yes | Yes | No | Keep supported. |
+| `chunkers.markdown_hierarchy` | `MarkdownHierarchySplitter` | Yes | Yes | No | Keep supported. |
+| `chunkers.json` | `JsonSplitter` | Yes | Yes | No | Keep; include `min_chunk_size` in API schema. |
+| `chunkers.qa` | `QASplitter` | Yes | Yes | No | Keep supported. |
+| `chunkers.markdown_table` | `MarkdownTableSplitter` | Yes | Yes | No | Keep; expose full table summarization option set. |
+| `chunkers.csv_table` | `CSVTableSplitter` | Yes | Yes | No | Keep; expose full summarization option set. |
+| `chunkers.html` | `HTMLSplitter` | Yes | Yes | No | Keep; expose full summarization option set. |
+| `chunkers.semantic` | `SemanticChunker` | Yes | Yes | No | Keep strict behavior and thresholds as-is. |
+| `chunkers.*` | callable hooks like `length_function` | No | Optional (advanced SDK) | Yes | Do not expose callables in HTTP API; use predefined modes. |
+| `chunkers.table_rows` | `ParsedTable`, `TableRowChunk`, helper functions | No | Optional | Yes | Keep internal by default. |
+| `chunkers.language` | `detect_nltk_language`, `resolve_nltk_language` | No | Optional | Yes | Keep internal helper layer. |
+| `retrieval.retrievers` | `create_vector_retriever`, `create_bm25_retriever`, `create_graph_retriever` | No | Yes | No | Prefer factory-driven retriever composition. |
+| `retrieval.retrievers` | `RegexRetriever`, `FuzzyRetriever` classes | No | Yes | No | SDK-only classes; map to strategy enums in HTTP if needed. |
+| `retrieval.composition` | `create_ensemble_retriever`, `create_dual_storage_retriever`, `create_scored_dual_storage_retriever`, `create_reranking_retriever`, `create_graph_hybrid_retriever` | No | Yes | No | Use composition factories directly; avoid custom merge branches. |
+| `retrieval.scored_retriever` | `SearchType`, `HydrationMode` | Yes | Yes | No | Keep enum parity across API layer. |
+| `retrieval.scored_retriever` | `ScoredMultiVectorRetriever` | No | Yes | No | Keep as SDK-level concrete retriever implementation. |
+| `retrieval.graph_retriever` | `GraphRetriever`, `GraphQueryConfig`, `KeywordTiers`, errors | No | Yes | No | Use strict graph path and explicit error mapping. |
+| `graph.store` | `BaseGraphStore`, `GraphExpansionResult`, `NetworkXGraphStore` | No (direct class API) | Yes | No | Keep; avoid hidden backend substitution. |
+| `graph.neo4j_store` | `Neo4jGraphStore` | No (direct class API) | Yes | No | Keep strict behavior; remove auto-downgrade fallbacks. |
+| `graph.community` | `CommunityDetector` | No | Yes | No | Keep supported. |
+| `processors.enricher` | `SegmentEnricher` | No | Yes | No | Keep supported. |
+| `processors.entity_extractor` | `EntityExtractor` | No | Yes | No | Keep supported. |
+| `processors.community_summarizer` | `CommunitySummarizer` | No | Yes | No | Keep supported. |
+| `processors.raptor` | `RaptorProcessor` | No | Yes | No | Expose advanced options already supported by library. |
+| `raptor.*` | `ClusteringService`, `ClusterSummarizer`, `TreeBuilder` | No | Yes | No | Keep as SDK-level advanced configuration surface. |
+| `summarizers.table` | `TableSummarizer`, `MockTableSummarizer`, `LLMTableSummarizer` | No | Yes | No | Keep and expose supported options in SDK. |
+| `summarizers.table_llm` | `LLMTableSummarizer(prompt_template, soft_max_chars)` | No | Yes | No | Expose missing options explicitly in SDK. |
+| `vectors.factory` | `create_vector_store` | No (direct function) | Yes | No | Use provider-driven config; avoid direct object plumbing in HTTP. |
+| `embeddings.factory` | `create_embeddings_model` | No (direct function) | Yes | No | Keep supported. |
+| `llm.factory` | `create_llm` | No (direct function) | Yes | No | Expose supported args in SDK; keep callback objects out of HTTP. |
+
+### 15.3 Implementation rules for external HTTP APIs
+
+- Keep HTTP contracts JSON-only: no Python callables, model instances, or runtime callbacks.
+- Expose enums as strict strings matching `rag_lib` values (`SearchType`, `HydrationMode`, `SchemaDialect`, `FetchMode`, `CrawlScope`, Playwright profile names).
+- Prefer explicit failure over silent fallback in backend selection, retrieval mode, and graph mode.
+- Treat helper/utility functions as internal unless there is a clear product need and stability commitment.
+- Prefer high-level, declarative config objects over low-level orchestration endpoints.
