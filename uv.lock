@@ -4451,7 +4451,7 @@ wheels = [
 
 [[package]]
 name = "rag-lib"
-version = "0.2.1"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },

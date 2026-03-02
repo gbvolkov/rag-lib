@@ -24,6 +24,15 @@ class VectorStoreSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="VECTOR_")
 
+class GraphStoreSettings(BaseSettings):
+    provider: str = "networkx"
+    uri: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    database: str = "neo4j"
+
+    model_config = SettingsConfigDict(env_prefix="GRAPH_")
+
 class IngestionSettings(BaseSettings):
     chunk_size: int = 100 # CSV rows
     semantic_threshold: float = 0.6
@@ -53,6 +62,7 @@ class Settings(BaseSettings):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     embeddings: EmbeddingsSettings = Field(default_factory=EmbeddingsSettings)
     vector_store: VectorStoreSettings = Field(default_factory=VectorStoreSettings)
+    graph_store: GraphStoreSettings = Field(default_factory=GraphStoreSettings)
     ingestion: IngestionSettings = Field(default_factory=IngestionSettings)
     prompts: PromptSettings = Field(default_factory=PromptSettings)
     

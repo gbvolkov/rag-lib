@@ -628,3 +628,70 @@ class NetworkXGraphStore(BaseGraphStore):
             )
             self._graph[source][target][key]["edge_id"] = edge_id
             self._edge_id_to_key[edge_id] = (source, target, key)
+
+
+def create_graph_store(
+    provider: Optional[str] = None,
+    uri: Optional[str] = None,
+    auth: Optional[tuple[str, str]] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    database: Optional[str] = None,
+) -> BaseGraphStore:
+    """
+    Factory to create a graph store backend.
+
+    Args:
+        provider: Backend provider ("networkx" or "neo4j"). Falls back to settings.
+        uri: Neo4j URI (e.g. "bolt://localhost:7687").
+        auth: Neo4j auth tuple of (username, password). If provided, overrides username/password.
+        username: Neo4j username when auth is not provided.
+        password: Neo4j password when auth is not provided.
+        database: Neo4j database name. Defaults to "neo4j" via settings.
+    """
+    from rag_lib.config import Settings
+
+    settings = Settings()
+    resolved_provider = (provider or settings.graph_store.provider or "networkx").strip().lower()
+
+    if resolved_provider == "networkx":
+        return NetworkXGraphStore()
+
+    if resolved_provider == "neo4j":
+        resolved_uri = uri or settings.graph_store.uri
+        resolved_database = database or settings.graph_store.database or "neo4j"
+
+        resolved_auth: Optional[tuple[str, str]] = None
+        if auth is not None:
+            if len(auth) != 2 or not auth[0] or not auth[1]:
+                raise ValueError("`auth` must be a tuple of (username, password).")
+            resolved_auth = auth
+        else:
+            resolved_username = username if username is not None else settings.graph_store.username
+            resolved_password = password if password is not None else settings.graph_store.password
+            if resolved_username and resolved_password:
+                resolved_auth = (resolved_username, resolved_password)
+
+        if not resolved_uri:
+            raise ValueError("Neo4j provider requires `uri` (or GRAPH_URI).")
+        if resolved_auth is None:
+            raise ValueError(
+                "Neo4j provider requires `auth` or `username`/`password` "
+                "(or GRAPH_USERNAME/GRAPH_PASSWORD)."
+            )
+
+        return Neo4jGraphStore(uri=resolved_uri, auth=resolved_auth, database=resolved_database)
+
+    raise ValueError(f"Unknown Graph Store provider: {resolved_provider}")
+
+
+from rag_lib.graph.neo4j_store import Neo4jGraphStore
+
+
+__all__ = [
+    "BaseGraphStore",
+    "GraphExpansionResult",
+    "NetworkXGraphStore",
+    "Neo4jGraphStore",
+    "create_graph_store",
+]

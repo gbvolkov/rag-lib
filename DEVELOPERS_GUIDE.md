@@ -1426,6 +1426,8 @@ Additional helpers:
 #### Graph store model (`rag_lib.graph.store`)
 
 - `GraphExpansionResult` (`nodes`, `edges`, `hop_by_node`)
+- `create_graph_store(provider=None, uri=None, auth=None, username=None, password=None, database=None)`
+- `Neo4jGraphStore` (re-export; direct module remains `rag_lib.graph.neo4j_store`)
 
 #### Neo4j graph store (`rag_lib.graph.neo4j_store`)
 
@@ -1562,8 +1564,8 @@ This section defines a recommended exposure boundary when implementing a public-
 | `retrieval.scored_retriever` | `SearchType`, `HydrationMode` | Yes | Yes | No | Keep enum parity across API layer. |
 | `retrieval.scored_retriever` | `ScoredMultiVectorRetriever` | No | Yes | No | Keep as SDK-level concrete retriever implementation. |
 | `retrieval.graph_retriever` | `GraphRetriever`, `GraphQueryConfig`, `KeywordTiers`, errors | No | Yes | No | Use strict graph path and explicit error mapping. |
-| `graph.store` | `BaseGraphStore`, `GraphExpansionResult`, `NetworkXGraphStore` | No (direct class API) | Yes | No | Keep; avoid hidden backend substitution. |
-| `graph.neo4j_store` | `Neo4jGraphStore` | No (direct class API) | Yes | No | Keep strict behavior; remove auto-downgrade fallbacks. |
+| `graph.store` | `BaseGraphStore`, `GraphExpansionResult`, `NetworkXGraphStore`, `Neo4jGraphStore`, `create_graph_store` | No (direct class API) | Yes | No | Keep explicit backend selection via factory; avoid hidden fallback substitution. |
+| `graph.neo4j_store` | `Neo4jGraphStore` | No (direct class API) | Yes | No | Keep as compatibility/direct backend module import. |
 | `graph.community` | `CommunityDetector` | No | Yes | No | Keep supported. |
 | `processors.enricher` | `SegmentEnricher` | No | Yes | No | Keep supported. |
 | `processors.entity_extractor` | `EntityExtractor` | No | Yes | No | Keep supported. |
