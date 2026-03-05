@@ -108,6 +108,7 @@ def create_vector_retriever(
     top_k: int = 4,
     search_type: str = "similarity", # "similarity", "mmr", "similarity_score_threshold"
     score_threshold: Optional[float] = None,
+    filter: Optional[Dict[str, Any]] = None,
 ) -> BaseRetriever:
     """
     Factory validation for standard Vector Retriever.
@@ -115,6 +116,8 @@ def create_vector_retriever(
     kwargs = {"k": top_k}
     if score_threshold is not None:
         kwargs["score_threshold"] = score_threshold
+    if filter is not None:
+        kwargs["filter"] = filter
         
     return vector_store.as_retriever(
         search_type=search_type,
