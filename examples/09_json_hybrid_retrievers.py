@@ -9,6 +9,7 @@ from rag_lib.core.indexer import Indexer
 from rag_lib.embeddings.factory import create_embeddings_model
 from rag_lib.loaders.data_loaders import JsonLoader
 from rag_lib.vectors.factory import create_vector_store
+from rag_lib.retrieval.retrievers import create_vector_retriever
 
 """
 E2E Example 09: JSON Hybrid Workflow
@@ -56,7 +57,7 @@ def main() -> None:
 
     print(f"Loaded {len(docs)} document(s).")
     print(f"Raw JSON length: {len(docs[0].page_content)} characters.")
-    save_json_results(docs, "09_json_hybrid", "loaded_documents")
+    save_json_results(docs, "09_json_hybrid_retrievers", "loaded_documents")
 
     print_section("2. JSON Segmentation")
     splitter = JsonSplitter(schema=".", ensure_ascii=False)
@@ -69,14 +70,14 @@ def main() -> None:
 
     print(f"Sample segment: {segments[0].content[:180]}...")
     print(f"Sample metadata: {segments[0].metadata}")
-    save_json_results(segments, "09_json_hybrid", "segments")
+    save_json_results(segments, "09_json_hybrid_retrievers", "segments")
 
     print_section("3. Indexing")
     embeddings = create_embeddings_model(provider="openai", model_name="text-embedding-3-small")
     vector_store = create_vector_store(
         provider="chroma",
         embeddings=embeddings,
-        collection_name="09_json_hybrid",
+        collection_name="09_json_hybrid_retrievers",
         cleanup=True,
     )
     indexer = Indexer(vector_store=vector_store, embeddings=embeddings)
@@ -96,27 +97,42 @@ def main() -> None:
     #    json_metadata_filter = {"json__metadata__it_system": sample_metadata["json__metadata__it_system"]}
     json_metadata_filter = {"json__metadata__it_system": "1С:CRM"}
 
+    simple_retriever = create_vector_retriever(
+        vector_store=vector_store,
+        top_k=3,
+        search_type="similarity",
+    )
+    common_filter_retriever = create_vector_retriever(
+        vector_store=vector_store,
+        top_k=3,
+        search_type="similarity",
+        filter=common_metadata_filter,
+    )
+    json_filter_retriever = create_vector_retriever(
+        vector_store=vector_store,
+        top_k=3,
+        search_type="similarity",
+        filter=json_metadata_filter,
+    )
+
+
     print(f"Query: {query}")
     print("Running baseline vector search...")
-    baseline_results = vector_store.similarity_search(query, k=3)
-    save_json_results(baseline_results, "09_json_hybrid", "retrieved_results_basic")
+    baseline_results = simple_retriever.invoke(query)
+    save_json_results(baseline_results, "09_json_hybrid_retrievers", "retrieved_results_basic")
     _print_results("Baseline Results", baseline_results)
 
     print(f"Running filtered vector search with common filter={common_metadata_filter}...")
-    filtered_results = vector_store.similarity_search(query, k=3, filter=common_metadata_filter)
-    save_json_results(filtered_results, "09_json_hybrid", "retrieved_results_filtered")
+    filtered_results = common_filter_retriever.invoke(query)
+    save_json_results(filtered_results, "09_json_hybrid_retrievers", "retrieved_results_filtered")
     _print_results("Common Metadata Filter Results", filtered_results)
 
     if json_metadata_filter:
         print(f"Running filtered vector search with JSON metadata filter={json_metadata_filter}...")
-        filtered_json_metadata_results = vector_store.similarity_search(
-            query,
-            k=3,
-            filter=json_metadata_filter,
-        )
+        filtered_json_metadata_results = json_filter_retriever.invoke(query)
         save_json_results(
             filtered_json_metadata_results,
-            "09_json_hybrid",
+            "09_json_hybrid_retrievers",
             "retrieved_results_filtered_json_metadata",
         )
         _print_results("JSON Metadata Filter Results", filtered_json_metadata_results)
