@@ -1,6 +1,6 @@
 [project]
 name = "rag-lib"
-version = "0.2.6"
+version = "0.2.7"
 description = "Advanced RAG Library for Ingestion, Segmentation, and Indexing"
 authors = [
     { name = "User", email = "user@example.com" }
@@ -40,6 +40,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "rank-bm25>=0.2.2",
     "playwright>=1.58.0",
+    "pandas>=2.3.3",
 ]
 requires-python = ">=3.12,<3.14"
 

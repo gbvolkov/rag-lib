@@ -26,6 +26,7 @@ from rag_lib.core.domain import Segment, SegmentType
 from rag_lib.processors.enricher import SegmentEnricher
 from rag_lib.chunkers.recursive import RecursiveCharacterTextSplitter
 from rag_lib.core.indexer import Indexer
+from rag_lib.loaders.pptx import PPTXLoader
 from rag_lib.vectors.factory import create_vector_store
 from example_utils import setup_environment, print_section
 
@@ -74,9 +75,25 @@ def main():
     md_seg = load_text_segment(MD_FILE, "markdown")
     if md_seg: segments.append(md_seg)
 
-    # Placeholder for PPTX
     print(f"Checking {PPTX_FILE.name}...")
-    print("  -> Loading PPTX files is To be implemented (Placeholder). Skipping.")
+    if PPTX_FILE.exists():
+        print(f"Loading {PPTX_FILE.name} with PPTXLoader...")
+        try:
+            pptx_docs = PPTXLoader(str(PPTX_FILE)).load()
+            if pptx_docs:
+                segments.append(
+                    Segment(
+                        content=pptx_docs[0].page_content,
+                        type=SegmentType.TEXT,
+                        original_format="markdown",
+                        path=[PPTX_FILE.name],
+                        metadata={"source_file": PPTX_FILE.name},
+                    )
+                )
+        except Exception as e:
+            print(f"Error loading {PPTX_FILE.name}: {e}")
+    else:
+        print(f"Warning: File {PPTX_FILE} not found.")
 
     print(f"Total raw segments loaded: {len(segments)}")
     if not segments:

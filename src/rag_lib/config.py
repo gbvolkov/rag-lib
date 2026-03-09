@@ -49,6 +49,16 @@ class PromptSettings(BaseSettings):
         "Summary:"
     )
     table_summarizer_soft_max_chars: int = 700
+    presentation_visual_summarizer_template: str = (
+        "You analyze content extracted from a PowerPoint presentation.\n"
+        "Summarize the visual in one concise factual paragraph.\n"
+        "Visual kind: {visual_kind}\n"
+        "Slide title: {slide_title}\n"
+        "Shape name: {shape_name}\n"
+        "Structured content:\n{structured_markdown}\n\n"
+        "Summary:"
+    )
+    presentation_visual_summarizer_soft_max_chars: int = 500
 
     model_config = SettingsConfigDict(env_prefix="PROMPT_")
 

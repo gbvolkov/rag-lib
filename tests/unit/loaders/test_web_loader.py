@@ -1245,6 +1245,7 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(web_common, "PDFLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "PyMuPDFLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "DocXLoader", _FakeLoader)
+    monkeypatch.setattr(web_common, "PPTXLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "HTMLLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "CSVLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "ExcelLoader", _FakeLoader)
@@ -1257,6 +1258,11 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
             "https://example.com/a.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "DocXLoader",
+        ),
+        (
+            "https://example.com/a.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "PPTXLoader",
         ),
         ("https://example.com/a.html", "text/html", "HTMLLoader"),
         ("https://example.com/a.csv", "text/csv", "CSVLoader"),

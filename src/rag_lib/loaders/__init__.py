@@ -1,4 +1,5 @@
 from rag_lib.loaders.html import HTMLLoader
+from rag_lib.loaders.pptx import PPTXLoader
 from rag_lib.loaders.web import WebLoader
 from rag_lib.loaders.web_async import AsyncWebLoader
 from rag_lib.loaders.web_common import WebCleanupConfig, WebLink
@@ -13,6 +14,7 @@ from rag_lib.loaders.web_playwright_extractors import (
 
 __all__ = [
     "HTMLLoader",
+    "PPTXLoader",
     "WebLoader",
     "AsyncWebLoader",
     "WebCleanupConfig",
