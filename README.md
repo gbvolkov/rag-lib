@@ -9,6 +9,7 @@
 - Python 3.9+
 - **Poppler** (for PDF parsing)
 - **Ghostscript** (for table extraction)
+- **Tesseract OCR** (for image OCR in `ImageLoader`)
 
 ### Installing from Source (Recommended)
 
@@ -48,6 +49,17 @@ text_segments = chunker.split_text(raw_text)
 # 3. Index
 indexer = Indexer(vector_store=my_vector, embeddings=my_embeddings)
 indexer.index(text_segments)
+```
+
+### Image Loader Example
+
+```python
+from rag_lib import ImageLoader
+
+loader = ImageLoader("scan.png", ocr_lang="eng")
+docs = loader.load()
+
+print(docs[0].page_content)
 ```
 
 ### Web Crawling Example

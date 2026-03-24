@@ -63,8 +63,8 @@ def test_live_table_summarization():
     
     try:
         # 1. Initialize Real LLM
-        print("Initializing OpenAI Chat Model (gpt-4o-mini)...")
-        llm = create_llm(provider="openai", model_name="base")
+        print("Initializing OpenAI Chat Model (gpt-5-mini)...")
+        llm = create_llm(provider="openai", model_name="mini")
         
         # 2. Initialize Summarizer
         summarizer = LLMTableSummarizer(llm=llm)

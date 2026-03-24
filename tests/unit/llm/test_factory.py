@@ -3,16 +3,16 @@ from unittest.mock import patch, MagicMock
 from rag_lib.llm import factory as llm_factory
 from rag_lib.llm.factory import create_llm
 
-def test_get_openai_base():
+def test_get_openai_mini():
     with patch.object(llm_factory.settings, "openai_api_key", "sk-openai"):
         with patch("rag_lib.llm.factory.ChatOpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             
-            create_llm(model_name="base", provider="openai", temperature=0.0)
+            create_llm(model_name="mini", provider="openai", temperature=0.0)
             
             mock_openai.assert_called_with(
-                model="gpt-4o-mini",
+                model="gpt-5.4-mini",
                 api_key="sk-openai",
                 model_kwargs={
                     "max_tool_calls": 3,
@@ -53,4 +53,3 @@ def test_get_yandex():
                     model_uri="gpt://folder-123/yandexgpt-lite",
                     temperature=0.0,
                 )
-

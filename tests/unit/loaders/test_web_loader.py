@@ -1247,6 +1247,7 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(web_common, "DocXLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "PPTXLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "HTMLLoader", _FakeLoader)
+    monkeypatch.setattr(web_common, "ImageLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "CSVLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "ExcelLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "JsonLoader", _FakeLoader)
@@ -1265,6 +1266,7 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
             "PPTXLoader",
         ),
         ("https://example.com/a.html", "text/html", "HTMLLoader"),
+        ("https://example.com/a.png", "image/png", "ImageLoader"),
         ("https://example.com/a.csv", "text/csv", "CSVLoader"),
         (
             "https://example.com/a.xlsx",

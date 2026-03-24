@@ -80,7 +80,7 @@ def main() -> None:
 
     print_section("1. Loading PPTX + Visual Summaries")
     print(f"Loading {pptx_path.name} using PPTXLoader(summarize_visuals=True)...")
-    llm = create_llm(provider="openai", model_name="gpt-4o-mini", streaming=False)
+    llm = create_llm(provider="openai", model_name="gpt-5-mini", streaming=False)
     loader = PPTXLoader(
         str(pptx_path),
         include_notes=True,

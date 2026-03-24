@@ -20,6 +20,7 @@ from rag_lib.loaders.csv_excel import CSVLoader, ExcelLoader
 from rag_lib.loaders.data_loaders import JsonLoader, TextLoader
 from rag_lib.loaders.docx import DocXLoader
 from rag_lib.loaders.html import HTMLLoader
+from rag_lib.loaders.image import ImageLoader
 from rag_lib.loaders.pdf import PDFLoader
 from rag_lib.loaders.pptx import PPTXLoader
 from rag_lib.loaders.pymupdf import PyMuPDFLoader
@@ -37,6 +38,14 @@ _DOWNLOAD_EXTENSION_TO_KIND = {
     ".xlsx": "xlsx",
     ".json": "json",
     ".txt": "txt",
+    ".png": "image",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".webp": "image",
+    ".bmp": "image",
+    ".tif": "image",
+    ".tiff": "image",
+    ".gif": "image",
 }
 
 _DOWNLOAD_CONTENT_TYPE_TO_KIND = {
@@ -51,6 +60,12 @@ _DOWNLOAD_CONTENT_TYPE_TO_KIND = {
     "text/plain": "txt",
     "text/html": "html",
     "application/xhtml+xml": "html",
+    "image/png": "image",
+    "image/jpeg": "image",
+    "image/webp": "image",
+    "image/bmp": "image",
+    "image/tiff": "image",
+    "image/gif": "image",
 }
 
 _KIND_TO_EXTENSION = {
@@ -62,6 +77,7 @@ _KIND_TO_EXTENSION = {
     "xlsx": ".xlsx",
     "json": ".json",
     "txt": ".txt",
+    "image": ".png",
 }
 
 
@@ -712,6 +728,9 @@ def route_download_content_to_documents(
         elif kind == "txt":
             docs = TextLoader(temp_path).load()
             routed_loader = "TextLoader"
+        elif kind == "image":
+            docs = ImageLoader(temp_path).load()
+            routed_loader = "ImageLoader"
         else:
             raise ValueError(f"Unsupported download kind: {kind}")
 

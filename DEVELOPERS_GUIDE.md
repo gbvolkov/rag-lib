@@ -5,7 +5,7 @@ This guide is aligned to the current code in `src/rag_lib`.
 ## 1. Version and Runtime
 
 - Package name: `rag-lib`
-- Current project version (`pyproject.toml`): `0.2.3`
+- Current project version (`pyproject.toml`): `0.2.8`
 - Supported Python: `>=3.12,<3.14`
 
 To check installed package version:
@@ -41,6 +41,11 @@ Example:
 ```bash
 pip install -e ".[miner_u,graph,raptor,pymupdf]"
 ```
+
+System prerequisites used by specific loaders:
+
+- `poppler` / `ghostscript`: PDF extraction stack
+- `tesseract`: OCR backend for `ImageLoader`
 
 ## 3. Core Domain Models and Enums
 
@@ -83,6 +88,7 @@ Method:
 - `PDFLoader`
 - `PyMuPDFLoader`
 - `DocXLoader`
+- `ImageLoader`
 - `HTMLLoader`
 - `WebLoader`
 - `AsyncWebLoader`
@@ -138,6 +144,24 @@ DocXLoader(file_path: str)
 - Converts DOCX to markdown.
 - Returns one `Document` on success, `[]` on failures.
 - Metadata includes `source_type="docx"`, `output_format="markdown"`.
+
+#### `ImageLoader` (`rag_lib.loaders.image`)
+
+```python
+ImageLoader(
+    file_path: str,
+    *,
+    llm: Optional[BaseChatModel] = None,
+    ocr_lang: Optional[str] = None,
+    tesseract_cmd: Optional[str] = None,
+)
+```
+
+- Supports raster inputs: PNG, JPEG/JPG, WebP, BMP, TIFF/TIF, GIF.
+- Returns one markdown `Document` with `# <name>`, `## Summary`, and `## OCR` sections.
+- Uses Tesseract for OCR and `create_llm(model_name="mini", streaming=False)` for the default summary path.
+- Metadata includes `source_type="image"`, `output_format="markdown"`, `image_format`, `mime_type`, `ocr_engine`, optional `ocr_lang`.
+- Raises on unreadable/unsupported images, missing or failing Tesseract, and summary failures.
 
 #### `HTMLLoader` (`rag_lib.loaders.html`)
 
@@ -537,7 +561,7 @@ NavigationStateDocumentMode = {"separate_documents", "single_document"}
 #### Download routing kinds (internal mapping in `web_common`)
 
 ```python
-download_kind = {"pdf", "docx", "html", "csv", "xlsx", "json", "txt"}
+download_kind = {"pdf", "docx", "html", "csv", "xlsx", "json", "txt", "image"}
 ```
 
 Default routed loaders by kind:
@@ -549,6 +573,7 @@ Default routed loaders by kind:
 - `xlsx` -> `ExcelLoader`
 - `json` -> `JsonLoader`
 - `txt` -> `TextLoader`
+- `image` -> `ImageLoader`
 
 ## 5. Chunkers and Splitters (`rag_lib.chunkers`)
 
@@ -1122,7 +1147,7 @@ After hierarchy finalization additional keys may include:
 Notable defaults:
 
 - `llm.provider = "openai"`
-- `llm.model = "base"`
+- `llm.model = "mini"`
 - `llm.temperature = 0.0`
 - `embeddings.provider = "openai"`
 - `embeddings.model_name = None` (factory default for OpenAI becomes `"text-embedding-3-small"`)
@@ -1132,6 +1157,13 @@ Notable defaults:
 - `ingestion.chunk_size = 100`
 - `ingestion.semantic_threshold = 0.6`
 - `ingestion.default_pdf_backend = "poppler"`
+- `prompts.image_loader_summary_soft_max_chars = 500`
+
+LLM prompt defaults exposed through `PromptSettings` include:
+
+- `table_summarizer_template`
+- `presentation_visual_summarizer_template`
+- `image_loader_summary_template`
 
 ### 11.1 Factory Providers and Backends
 
@@ -1209,6 +1241,26 @@ Provider values:
 - `mistral`
 - `yandex`
 
+Model-name behavior:
+
+- `model_name` may be a literal provider model string or one of the semantic modes:
+  - `base`
+  - `mini`
+  - `nano`
+- Semantic modes are resolved through `models.toml` by `get_model(provider, mode)`.
+- Current defaults in repo config:
+  - `openai/base -> gpt-5.4`
+  - `openai/mini -> gpt-5.4-mini`
+  - `openai/nano -> gpt-5.4-nano`
+- `openai_think` uses the same model registry, but also injects reasoning settings in `model_kwargs`.
+- If a literal model name is passed, it is used directly and bypasses semantic mode lookup.
+
+Related helper:
+
+```python
+get_model(provider: str, mode: str, config_path: str = "models.toml") -> str
+```
+
 ## 12. Corrected Usage Examples
 
 ### 12.1 MinerU PDF to chunks
@@ -1273,6 +1325,31 @@ retriever = create_scored_dual_storage_retriever(
 
 docs = retriever.invoke("query")
 ```
+
+### 12.4 Image loader with OCR + multimodal summary
+
+```python
+from pathlib import Path
+
+from rag_lib.llm.factory import create_llm
+from rag_lib.loaders.image import ImageLoader
+
+docs_dir = Path("docs")
+llm = create_llm(provider="openai", model_name="mini", streaming=False)
+
+loaded_documents = []
+for image_path in sorted(docs_dir.glob("*.png")):
+    docs = ImageLoader(
+        str(image_path),
+        llm=llm,
+        ocr_lang="rus+eng",
+    ).load()
+    loaded_documents.extend(docs)
+```
+
+Reference example script:
+
+- `examples/18_image_loader.py`
 
 ## 13. Migration Notes
 
@@ -1495,6 +1572,7 @@ Async counterparts:
 
 `rag_lib.loaders` exports:
 
+- `ImageLoader`
 - `HTMLLoader`
 - `WebLoader`
 - `AsyncWebLoader`
@@ -1529,6 +1607,7 @@ This section defines a recommended exposure boundary when implementing a public-
 | `loaders.data_loaders` | `JsonLoader`, `SchemaDialect`, `TableLoader`, `TextLoader` | Yes | Yes | No | Keep loaders + strict `SchemaDialect` enums. |
 | `loaders.data_loaders` | `select_schema_target`, `iter_json_leaf_paths`, `render_json_as_markdown` | No | Optional (advanced SDK) | Yes | Keep helpers internal by default. |
 | `loaders.docx` | `DocXLoader` | Yes | Yes | No | Keep supported. |
+| `loaders.image` | `ImageLoader` | Yes | Yes | No | Keep supported; document Tesseract prerequisite and markdown output contract. |
 | `loaders.html` | `HTMLLoader` | Yes | Yes | No | Keep supported. |
 | `loaders.html` | `render_html_content` | No | Optional | Yes | Treat as helper, not HTTP contract. |
 | `loaders.miner_u` | `MinerULoader` | Yes | Yes | No | Keep strict behavior; do not add silent PDF fallbacks in API layer. |

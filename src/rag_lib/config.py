@@ -4,7 +4,7 @@ from pydantic import Field
 
 class LLMSettings(BaseSettings):
     provider: str = "openai"
-    model: str = "base"
+    model: str = "mini"
     temperature: float = 0.0
 
     model_config = SettingsConfigDict(env_prefix="LLM_")
@@ -59,6 +59,14 @@ class PromptSettings(BaseSettings):
         "Summary:"
     )
     presentation_visual_summarizer_soft_max_chars: int = 500
+    image_loader_summary_template: str = (
+        "You analyze a document image.\n"
+        "Use the image itself as the primary source and OCR text as supporting context.\n"
+        "Image name: {image_name}\n"
+        "OCR text:\n{ocr_text}\n\n"
+        "Summary:"
+    )
+    image_loader_summary_soft_max_chars: int = 500
 
     model_config = SettingsConfigDict(env_prefix="PROMPT_")
 

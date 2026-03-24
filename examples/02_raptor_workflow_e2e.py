@@ -105,7 +105,7 @@ def main():
     print_section("3. RAPTOR Processing (Hierarchical Summarization)")
     print("Initializing RaptorProcessor...")
     
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0) # Using cheaper/faster model for summaries
+    llm = ChatOpenAI(model="gpt-5.4-mini", temperature=0) # Using cheaper/faster model for summaries
     
     processor = RaptorProcessor(
         llm=llm,
