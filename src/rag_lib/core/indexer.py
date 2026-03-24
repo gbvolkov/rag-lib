@@ -86,7 +86,7 @@ class Indexer:
         for i in range(0, len(segments), batch_size):
             batch = segments[i : i + batch_size]
             self._process_batch(batch)
-            logger.debug(f"Indexed batch {i // batch_size + 1}")
+            logger.info(f"Indexed batch {i // batch_size + 1}")
 
     def _process_batch(self, batch: List[Segment]) -> None:
         texts_to_embed: List[str] = []
