@@ -1,4 +1,6 @@
 import pytest
+from unittest.mock import patch
+
 from rag_lib.chunkers.sentence import SentenceSplitter
 
 def test_sentence_split_basic():
@@ -48,3 +50,25 @@ def test_sentence_split_overlap():
     assert "S1. S2." in chunks
     assert "S2. S3." in chunks
     assert "S3. S4." in chunks
+
+
+def test_sentence_split_uses_local_punkt_when_nltk_resource_is_missing():
+    text = "Sentence one. Sentence two."
+    splitter = SentenceSplitter(chunk_size=200, chunk_overlap=0)
+
+    class _FakePunkt:
+        def __init__(self, train_text: str):
+            self.train_text = train_text
+
+        def tokenize(self, source_text: str):
+            assert self.train_text == text
+            assert source_text == text
+            return ["Sentence one.", "Sentence two."]
+
+    with patch("rag_lib.chunkers.sentence.sent_tokenize", side_effect=LookupError("missing")), patch(
+        "rag_lib.chunkers.sentence.PunktSentenceTokenizer",
+        _FakePunkt,
+    ):
+        chunks = splitter.split_text(text)
+
+    assert chunks == ["Sentence one. Sentence two."]

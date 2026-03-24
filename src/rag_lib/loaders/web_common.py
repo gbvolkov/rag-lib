@@ -21,6 +21,7 @@ from rag_lib.loaders.data_loaders import JsonLoader, TextLoader
 from rag_lib.loaders.docx import DocXLoader
 from rag_lib.loaders.html import HTMLLoader
 from rag_lib.loaders.image import ImageLoader
+from rag_lib.loaders.legacy_doc import LegacyDocLoader
 from rag_lib.loaders.pdf import PDFLoader
 from rag_lib.loaders.pptx import PPTXLoader
 from rag_lib.loaders.pymupdf import PyMuPDFLoader
@@ -29,6 +30,7 @@ HTML_CONTENT_TYPES = {"text/html", "application/xhtml+xml"}
 
 _DOWNLOAD_EXTENSION_TO_KIND = {
     ".pdf": "pdf",
+    ".doc": "doc",
     ".docx": "docx",
     ".pptx": "pptx",
     ".html": "html",
@@ -50,6 +52,7 @@ _DOWNLOAD_EXTENSION_TO_KIND = {
 
 _DOWNLOAD_CONTENT_TYPE_TO_KIND = {
     "application/pdf": "pdf",
+    "application/msword": "doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
@@ -70,6 +73,7 @@ _DOWNLOAD_CONTENT_TYPE_TO_KIND = {
 
 _KIND_TO_EXTENSION = {
     "pdf": ".pdf",
+    "doc": ".doc",
     "docx": ".docx",
     "pptx": ".pptx",
     "html": ".html",
@@ -707,6 +711,9 @@ def route_download_content_to_documents(
                 except Exception:
                     docs = PyMuPDFLoader(temp_path, output_format="markdown").load()
                     routed_loader = "PyMuPDFLoader"
+        elif kind == "doc":
+            docs = LegacyDocLoader(temp_path).load()
+            routed_loader = "LegacyDocLoader"
         elif kind == "docx":
             docs = DocXLoader(temp_path).load()
             routed_loader = "DocXLoader"

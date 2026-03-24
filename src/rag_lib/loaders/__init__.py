@@ -1,5 +1,6 @@
 from rag_lib.loaders.image import ImageLoader
 from rag_lib.loaders.html import HTMLLoader
+from rag_lib.loaders.legacy_doc import LegacyDocLoader
 from rag_lib.loaders.pptx import PPTXLoader
 from rag_lib.loaders.web import WebLoader
 from rag_lib.loaders.web_async import AsyncWebLoader
@@ -16,6 +17,7 @@ from rag_lib.loaders.web_playwright_extractors import (
 __all__ = [
     "ImageLoader",
     "HTMLLoader",
+    "LegacyDocLoader",
     "PPTXLoader",
     "WebLoader",
     "AsyncWebLoader",

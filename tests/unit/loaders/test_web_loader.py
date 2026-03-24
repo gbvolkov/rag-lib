@@ -1244,6 +1244,7 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(web_common, "PDFLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "PyMuPDFLoader", _FakeLoader)
+    monkeypatch.setattr(web_common, "LegacyDocLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "DocXLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "PPTXLoader", _FakeLoader)
     monkeypatch.setattr(web_common, "HTMLLoader", _FakeLoader)
@@ -1255,6 +1256,7 @@ def test_download_routing_selects_supported_loaders(monkeypatch: pytest.MonkeyPa
 
     cases = [
         ("https://example.com/a.pdf", "application/pdf", "PDFLoader"),
+        ("https://example.com/a.doc", "application/msword", "LegacyDocLoader"),
         (
             "https://example.com/a.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

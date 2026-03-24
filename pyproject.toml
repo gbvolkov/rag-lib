@@ -1,6 +1,6 @@
 [project]
 name = "rag-lib"
-version = "0.2.9"
+version = "0.2.10"
 description = "Advanced RAG Library for Ingestion, Segmentation, and Indexing"
 authors = [
     { name = "User", email = "user@example.com" }
@@ -44,6 +44,7 @@ dependencies = [
     "pandas>=2.3.3",
     "langchain-mistralai>=1.1.1",
     "pytest>=9.0.2",
+    "olefile>=0.47",
 ]
 requires-python = ">=3.12,<3.14"
 

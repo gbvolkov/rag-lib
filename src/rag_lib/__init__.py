@@ -3,6 +3,7 @@ from .core.indexer import Indexer
 from .loaders.pdf import PDFLoader
 from .loaders.pymupdf import PyMuPDFLoader
 from .loaders.docx import DocXLoader
+from .loaders.legacy_doc import LegacyDocLoader
 from .loaders.pptx import PPTXLoader
 from .loaders.image import ImageLoader
 from .loaders.html import HTMLLoader
@@ -27,6 +28,7 @@ __all__ = [
     "PDFLoader",
     "PyMuPDFLoader",
     "DocXLoader",
+    "LegacyDocLoader",
     "PPTXLoader",
     "ImageLoader",
     "HTMLLoader",
